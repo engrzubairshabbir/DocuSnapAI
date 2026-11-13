@@ -1,0 +1,7 @@
+## Location of the SDK. This is only used by Gradle.
+# sdk.dir=C\:\\Users\\SC\\AppData\\Local\\Android\\Sdk
+
+## Gemini API Key for DocuSnap AI Deep Reasoning
+## Get your API key from Google AI Studio: https://aistudio.google.com/
+# GEMINI_API_KEY=AIzaSy...
+

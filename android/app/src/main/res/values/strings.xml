@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">DocuSnap AI</string>
+    <string name="app_subtitle">Bill &amp; Rx Finder</string>
+    <string name="channel_media_observer">Media Observation Channel</string>
+    <string name="channel_media_observer_desc">Monitors gallery for documents, receipts, and prescriptions.</string>
+    <string name="default_web_client_id">638866510492-3j3q7d4f9p8g8k0h0k.apps.googleusercontent.com</string>
+</resources>
+

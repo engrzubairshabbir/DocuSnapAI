@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0F19" />
+      <stop offset="100%" stop-color="#111827" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+    <linearGradient id="sparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#3B82F6" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  
+  <!-- Outer glowing border -->
+  <rect x="4" y="4" width="504" height="504" rx="108" stroke="#374151" stroke-width="6"/>
+
+  <!-- Document Silhouette -->
+  <rect x="130" y="110" width="252" height="320" rx="24" fill="#1F2937" stroke="url(#accentGrad)" stroke-width="12"/>
+
+  <!-- Document Lines -->
+  <line x1="175" y1="190" x2="335" y2="190" stroke="#60A5FA" stroke-width="14" stroke-linecap="round"/>
+  <line x1="175" y1="240" x2="295" y2="240" stroke="#9CA3AF" stroke-width="10" stroke-linecap="round"/>
+  <line x1="175" y1="285" x2="335" y2="285" stroke="#9CA3AF" stroke-width="10" stroke-linecap="round"/>
+  <line x1="175" y1="330" x2="260" y2="330" stroke="#9CA3AF" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Camera / Scan Viewfinder Corners -->
+  <path d="M90 150 V90 H150" stroke="#3B82F6" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M422 150 V90 H362" stroke="#3B82F6" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M90 362 V422 H150" stroke="#06B6D4" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M422 362 V422 H362" stroke="#06B6D4" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- AI Sparkle Badge -->
+  <circle cx="360" cy="150" r="44" fill="#0B0F19" stroke="url(#sparkleGrad)" stroke-width="8"/>
+  <path d="M360 126 L365 145 L384 150 L365 155 L360 174 L355 155 L336 150 L355 145 Z" fill="#10B981"/>
+</svg>
+

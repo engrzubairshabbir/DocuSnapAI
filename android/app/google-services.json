@@ -1,0 +1,50 @@
+{
+  "project_info": {
+    "project_number": "638866510492",
+    "firebase_url": "https://webproject-58306.firebaseio.com",
+    "project_id": "webproject-58306",
+    "storage_bucket": "webproject-58306.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:638866510492:android:2baa12937b598dcfb2d359",
+        "android_client_info": {
+          "package_name": "com.docusnap.ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEtQx7ci2_0hmTlog8VbXZoBKkCnWz7D8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:638866510492:android:242d1cabcb3a65b4b2d359",
+        "android_client_info": {
+          "package_name": "dating.marriage.shadi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEtQx7ci2_0hmTlog8VbXZoBKkCnWz7D8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+

@@ -1,0 +1,23 @@
+{
+  "app_name": "DocuSnap AI: Bill & Rx Finder",
+  "package_name": "com.docusnap.ai",
+  "category": "PRODUCTIVITY",
+  "sub_category": "MEDICAL / FINANCE",
+  "content_rating": "Everyone",
+  "primary_language": "en-US",
+  "secondary_languages": ["ja-JP", "ko-KR", "zh-CN", "es-ES", "fr-FR", "de-DE", "ar", "hi-IN", "ur-PK"],
+  "keywords": [
+    "prescription scanner",
+    "medicine tracker",
+    "receipt scanner",
+    "bill organizer",
+    "utility bill tracker",
+    "screenshot vault",
+    "multilingual ocr",
+    "doctor prescription finder",
+    "offline document scanner",
+    "rx finder"
+  ],
+  "contact_email": "support@docusnap.ai",
+  "privacy_policy_url": "https://webproject-58306.web.app/privacy.html"
+}

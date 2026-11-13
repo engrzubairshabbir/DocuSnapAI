@@ -1,0 +1,36 @@
+Never lose a medical prescription, pharmacy receipt, or utility bill again.
+
+DocuSnap AI is your personal, offline-first document vault and intelligent finder. Built with on-device Google ML Kit OCR, SQLite FTS5 full-text search, and multilingual Gemini Vision & Reasoning, DocuSnap automatically detects document scans and screenshots, extracts key facts, and lets you ask questions in your language.
+
+============================================================
+AUTO SCREENSHOT & CAMERA VAULT (ZERO MANUAL EFFORT)
+============================================================
+Stop hunting through thousands of gallery photos. The moment you snap a bill, prescription, or take a screenshot on your phone, DocuSnap AI copies it in full resolution into your Smart Vault and indexes it automatically. Low-resolution icons and stickers are ignored.
+
+============================================================
+ASK ANYTHING — GLOBAL ANY-LANGUAGE SEARCH
+============================================================
+Search naturally in English, Japanese, Korean, Spanish, French, German, Arabic, Chinese, Hindi, or Urdu—even when queries and receipts are in different scripts:
+• "What medication was prescribed for stomach relief last month?"
+• "Show my latest electricity or utility bill total"
+• "東京マーケットの領収書の合計金額はいくらですか？"
+• "Find recent pharmacy or supermarket receipt"
+
+DocuSnap AI combines sub-second local SQLite FTS5 offline search with optional Global Multilingual AI Vision & Search to surface concise answers and clickable document cards.
+
+============================================================
+DEEP ENTITY EXTRACTION & FULL-RES SHARING
+============================================================
+1. Medical Prescriptions (Rx): Extracts doctor names, clinics, medicines, and dosages with one-tap copy.
+2. Expense Receipts: Captures merchant names, dates, and multi-currency totals.
+3. Utility Bills: Indexes providers, account IDs, usage, and due dates.
+4. Full-Resolution Sharing: Export and share stored bills or prescriptions in their original resolution and format anytime.
+
+============================================================
+OFFLINE-FIRST PRIVACY & CROSS-DEVICE CLOUD SYNC
+============================================================
+• 100% On-Device Mode: Run ML Kit OCR and SQLite FTS5 offline on your phone with zero cloud calls.
+• Optional Cloud Vault Mesh: Sync securely across Android, iOS Safari (PWA), and Desktop using Firebase Firestore & Cloud Storage.
+• Prepaid Global AI Wallet & Flexible Storage Tiers: Start free up to 500 documents, or upgrade monthly / one-time via Google Play Billing.
+
+Turn every screenshot, bill, and prescription into instant answers with DocuSnap AI!

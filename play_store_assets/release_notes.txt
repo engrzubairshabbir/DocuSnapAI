@@ -1,0 +1,9 @@
+DocuSnap AI v1.0.0 Initial Production Release:
+• Zero-click gallery ingestion: Auto-indexes prescriptions, bills & receipts from camera and screenshots.
+• On-device bundled Google ML Kit OCR for ultra-fast, zero-cost offline text recognition.
+• SQLite FTS5 database engine for sub-second offline search across all extracted text.
+• Gemini Flash Deep Semantic Reasoning for structured medicine dosages, total amounts, and dates.
+• Conversational Search: Ask in Roman Urdu or English ("Doctor ne konsi goli likhi thi?") and get instant direct answers.
+• Dual-ecosystem real-time synchronization with iOS & Desktop PWA via Firebase.
+• Deep-zoomable document viewer with one-click entity copy to clipboard.
+
