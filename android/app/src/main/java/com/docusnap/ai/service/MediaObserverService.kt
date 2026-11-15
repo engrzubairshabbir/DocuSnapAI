@@ -12,15 +12,17 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
+import androidx.work.*
 import com.docusnap.ai.DocuSnapApplication
 import com.docusnap.ai.R
 import com.docusnap.ai.ui.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 class MediaObserverService : Service() {
@@ -28,17 +30,35 @@ class MediaObserverService : Service() {
     private var contentObserver: ContentObserver? = null
     private val debounceHandler = Handler(Looper.getMainLooper())
     private var pendingUri: Uri? = null
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
         startForegroundServiceNotification()
         registerMediaObserver()
         scheduleContentUriTrigger(applicationContext)
+        schedulePeriodicScan(applicationContext)
+
+        // Instant scan on start
+        serviceScope.launch {
+            try {
+                MediaIngestionWorker.processDirectly(applicationContext, scanLimit = 25)
+            } catch (e: Exception) {
+                Log.e("MediaObserverService", "Initial scan error: ${e.message}")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        MediaIngestionWorker.enqueueScan(applicationContext, scanRecentLimit = 25)
         scheduleContentUriTrigger(applicationContext)
+        schedulePeriodicScan(applicationContext)
+        serviceScope.launch {
+            try {
+                MediaIngestionWorker.processDirectly(applicationContext, scanLimit = 25)
+            } catch (e: Exception) {
+                Log.e("MediaObserverService", "Start command scan error: ${e.message}")
+            }
+        }
         return START_STICKY
     }
 
@@ -72,10 +92,10 @@ class MediaObserverService : Service() {
         contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
                 super.onChange(selfChange, uri)
-                // Debounce rapid gallery notifications (give OS 1.5s to finish writing screenshot file)
                 pendingUri = uri
                 debounceHandler.removeCallbacks(debounceRunnable)
-                debounceHandler.postDelayed(debounceRunnable, 1500)
+                // Fast 350ms debounce: allows OS to flush file header, then instantly ingests
+                debounceHandler.postDelayed(debounceRunnable, 350)
             }
         }
 
@@ -96,7 +116,21 @@ class MediaObserverService : Service() {
     }
 
     private val debounceRunnable = Runnable {
-        triggerIngestionWorker(pendingUri)
+        val uri = pendingUri
+        // 1. Instant direct in-process ingestion (< 300ms)
+        serviceScope.launch {
+            try {
+                MediaIngestionWorker.processDirectly(
+                    applicationContext,
+                    uris = listOfNotNull(uri),
+                    scanLimit = 15
+                )
+            } catch (e: Exception) {
+                Log.e("MediaObserverService", "Direct ingestion error: ${e.message}")
+            }
+        }
+        // 2. WorkManager as durable OS backup
+        triggerIngestionWorker(uri)
     }
 
     private fun triggerIngestionWorker(triggeredUri: Uri?) {
@@ -107,13 +141,10 @@ class MediaObserverService : Service() {
             MediaIngestionWorker.KEY_SCAN_LIMIT to 25
         )
 
-        // Work constraint: runs immediate OCR on-device without network,
-        // cloud sync worker will execute upon connectivity.
         val workRequest = OneTimeWorkRequestBuilder<MediaIngestionWorker>()
             .setInputData(dataBuilder)
             .build()
 
-        // REPLACE ensures the latest triggered scan runs immediately
         workManager.enqueueUniqueWork(
             MediaIngestionWorker.UNIQUE_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
@@ -126,6 +157,7 @@ class MediaObserverService : Service() {
         contentObserver?.let {
             contentResolver.unregisterContentObserver(it)
         }
+        serviceScope.cancel()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -133,18 +165,20 @@ class MediaObserverService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 4091
         private const val CONTENT_TRIGGER_WORK_NAME = "DocuSnapMediaContentUriTrigger"
+        private const val PERIODIC_WORK_NAME = "DocuSnapPeriodicMediaScan"
         const val TAG_CONTENT_TRIGGER = "docusnap_content_uri_trigger"
 
         /**
          * Registers a WorkManager OS ContentUriTrigger so screenshots and camera photos
-         * are caught across Android 8–16 even if OEMs (Xiaomi MIUI/HyperOS) kill the service.
+         * are caught across Android 7–16 even if OEMs (Xiaomi MIUI/HyperOS) kill the service.
          */
         fun scheduleContentUriTrigger(context: Context, rearmFromRunningTrigger: Boolean = false) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 val constraints = Constraints.Builder()
                     .addContentUriTrigger(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true)
-                    .setTriggerContentUpdateDelay(800L, TimeUnit.MILLISECONDS)
-                    .setTriggerContentMaxDelay(3500L, TimeUnit.MILLISECONDS)
+                    .addContentUriTrigger(MediaStore.Images.Media.INTERNAL_CONTENT_URI, true)
+                    .setTriggerContentUpdateDelay(400L, TimeUnit.MILLISECONDS)
+                    .setTriggerContentMaxDelay(2000L, TimeUnit.MILLISECONDS)
                     .build()
 
                 val request = OneTimeWorkRequestBuilder<MediaIngestionWorker>()
@@ -161,12 +195,31 @@ class MediaObserverService : Service() {
             }
         }
 
+        /**
+         * 15-minute Periodic safety net that catches any missed images when app is closed.
+         */
+        fun schedulePeriodicScan(context: Context) {
+            val periodicRequest = PeriodicWorkRequestBuilder<MediaIngestionWorker>(15, TimeUnit.MINUTES)
+                .setInputData(workDataOf(MediaIngestionWorker.KEY_SCAN_LIMIT to 25))
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                PERIODIC_WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                periodicRequest
+            )
+        }
+
         fun start(context: Context) {
-            val intent = Intent(context, MediaObserverService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                val intent = Intent(context, MediaObserverService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                Log.e("MediaObserverService", "Failed to start service: ${e.message}")
             }
         }
 
@@ -176,4 +229,3 @@ class MediaObserverService : Service() {
         }
     }
 }
-

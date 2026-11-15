@@ -42,6 +42,7 @@ class MainActivity : ComponentActivity() {
             Log.d("DocuSnapAuth", "Media permission granted (full or selected). Starting service and initial scan.")
             MediaObserverService.start(this)
             MediaObserverService.scheduleContentUriTrigger(this)
+            MediaObserverService.schedulePeriodicScan(this)
             // Immediately scan gallery/selected photos & screenshots into Room database
             MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 50)
         } else {
@@ -83,9 +84,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        MediaObserverService.scheduleContentUriTrigger(this)
         if (hasAnyMediaPermission()) {
-            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 25)
+            MediaObserverService.start(this)
+            MediaObserverService.scheduleContentUriTrigger(this)
+            MediaObserverService.schedulePeriodicScan(this)
+            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 30)
         }
     }
 
@@ -170,6 +173,7 @@ class MainActivity : ComponentActivity() {
         } else {
             MediaObserverService.start(this)
             MediaObserverService.scheduleContentUriTrigger(this)
+            MediaObserverService.schedulePeriodicScan(this)
             // Permission already granted on subsequent launches: trigger recent scan
             MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 50)
         }

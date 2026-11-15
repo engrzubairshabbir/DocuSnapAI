@@ -1,11 +1,16 @@
 package com.docusnap.ai
 
+import android.Manifest
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import com.docusnap.ai.data.local.AppDatabase
+import com.docusnap.ai.service.MediaIngestionWorker
+import com.docusnap.ai.service.MediaObserverService
 import com.docusnap.ai.sync.FirebaseSyncRepository
 
 class DocuSnapApplication : Application() {
@@ -31,6 +36,29 @@ class DocuSnapApplication : Application() {
 
         // Create notification channels for background ingestion service
         createNotificationChannels()
+
+        // Auto-start zero-click guard and background observers if storage permission is already granted
+        if (hasMediaPermission()) {
+            MediaObserverService.start(this)
+            MediaObserverService.scheduleContentUriTrigger(this)
+            MediaObserverService.schedulePeriodicScan(this)
+            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 30)
+        }
+    }
+
+    fun hasMediaPermission(): Boolean {
+        return when {
+            Build.VERSION.SDK_INT >= 34 -> {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+            }
+            else -> {
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+            }
+        }
     }
 
     private fun createNotificationChannels() {
@@ -54,4 +82,3 @@ class DocuSnapApplication : Application() {
             private set
     }
 }
-
