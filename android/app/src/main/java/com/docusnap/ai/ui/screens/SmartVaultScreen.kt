@@ -118,12 +118,30 @@ fun SmartVaultScreen(
         }
     }
 
-    // Choice Dialog: Camera or Gallery
+    // PDF and All Documents Picker
+    val documentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri ->
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: Exception) {}
+            }
+            viewModel.ingestSelectedUris(uris)
+            Toast.makeText(context, "Importing & Scanning ${uris.size} document(s)...", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Choice Dialog: Camera, Gallery or PDF/All Documents
     if (showAddSourceDialog) {
         AlertDialog(
             onDismissRequest = { showAddSourceDialog = false },
             title = {
-                Text("Add Bill or Prescription", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Add Bill, Prescription or Document", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -155,6 +173,20 @@ fun SmartVaultScreen(
                         Icon(imageVector = Icons.Default.AddPhotoAlternate, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Pick from Gallery / Photos", color = TextPrimary)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            showAddSourceDialog = false
+                            documentPicker.launch(arrayOf("application/pdf", "image/*", "*/*"))
+                        },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentPurple.copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.PictureAsPdf, contentDescription = null, tint = AccentPurple, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Upload PDF or Any Document", color = TextPrimary, fontWeight = FontWeight.Medium)
                     }
                 }
             },
@@ -397,8 +429,24 @@ fun VaultGridItem(
     doc: DocumentEntity,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val keyEntities = remember(doc.keyEntitiesJson) {
         KeyEntities.fromJson(doc.keyEntitiesJson)
+    }
+    val isPdf = remember(doc.localImageUri, doc.cloudStorageUrl, doc.searchableTagsJson) {
+        doc.localImageUri.endsWith(".pdf", ignoreCase = true) ||
+            doc.cloudStorageUrl?.contains(".pdf", ignoreCase = true) == true ||
+            doc.searchableTagsJson.contains("pdf", ignoreCase = true)
+    }
+    val thumbFile = remember(doc.id) {
+        File(context.filesDir, "vault_thumbs/${doc.id}.webp")
+    }
+    val imageModel = remember(doc.localImageUri, doc.cloudStorageUrl, thumbFile) {
+        if (isPdf && thumbFile.exists()) {
+            thumbFile
+        } else {
+            doc.cloudStorageUrl ?: doc.localImageUri
+        }
     }
 
     Card(
@@ -418,9 +466,9 @@ fun VaultGridItem(
                     .background(CardDark),
                 contentAlignment = Alignment.Center
             ) {
-                if (doc.localImageUri.isNotBlank() || !doc.cloudStorageUrl.isNullOrBlank()) {
+                if (doc.localImageUri.isNotBlank() || !doc.cloudStorageUrl.isNullOrBlank() || thumbFile.exists()) {
                     AsyncImage(
-                        model = doc.cloudStorageUrl ?: doc.localImageUri,
+                        model = imageModel,
                         contentDescription = doc.title,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
@@ -429,11 +477,29 @@ fun VaultGridItem(
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Description,
+                        imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.Description,
                         contentDescription = null,
-                        tint = AccentBlue,
+                        tint = if (isPdf) AccentPurple else AccentBlue,
                         modifier = Modifier.size(36.dp)
                     )
+                }
+
+                if (isPdf) {
+                    Surface(
+                        color = Color(0xFFDC2626).copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            text = "PDF",
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
                 }
 
                 // Sync badge on top right of image

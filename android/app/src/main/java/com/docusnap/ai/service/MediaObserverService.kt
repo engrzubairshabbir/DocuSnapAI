@@ -72,16 +72,21 @@ class MediaObserverService : Service() {
         contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
                 super.onChange(selfChange, uri)
-                // Debounce rapid gallery notifications
+                // Debounce rapid gallery notifications (give OS 1.5s to finish writing screenshot file)
                 pendingUri = uri
                 debounceHandler.removeCallbacks(debounceRunnable)
-                debounceHandler.postDelayed(debounceRunnable, 1200)
+                debounceHandler.postDelayed(debounceRunnable, 1500)
             }
         }
 
         try {
             contentResolver.registerContentObserver(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                true,
+                contentObserver!!
+            )
+            contentResolver.registerContentObserver(
+                MediaStore.Images.Media.INTERNAL_CONTENT_URI,
                 true,
                 contentObserver!!
             )
@@ -108,10 +113,10 @@ class MediaObserverService : Service() {
             .setInputData(dataBuilder)
             .build()
 
-        // ExistingWorkPolicy.KEEP ensures no events are dropped while avoiding redundant jobs
+        // REPLACE ensures the latest triggered scan runs immediately
         workManager.enqueueUniqueWork(
             MediaIngestionWorker.UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            ExistingWorkPolicy.REPLACE,
             workRequest
         )
     }

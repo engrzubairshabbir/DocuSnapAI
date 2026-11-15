@@ -125,6 +125,19 @@ fun DocumentInspectorScreen(
 
     val animatedNeonBorder = rememberAnimatedNeonBorder(durationMillis = 3500)
 
+    val isPdf = remember(doc) {
+        doc.localImageUri.endsWith(".pdf", ignoreCase = true) || doc.documentType.equals("pdf", ignoreCase = true)
+    }
+
+    val previewModel = remember(doc) {
+        if (doc.localImageUri.endsWith(".pdf", ignoreCase = true)) {
+            val thumbFile = java.io.File(context.filesDir, "vault_thumbs/${doc.id}.webp")
+            if (thumbFile.exists()) thumbFile else doc.localImageUri
+        } else {
+            doc.localImageUri.ifBlank { doc.cloudStorageUrl }
+        }
+    }
+
     Scaffold(
         containerColor = BgDark,
         topBar = {
@@ -198,7 +211,7 @@ fun DocumentInspectorScreen(
                 contentAlignment = Alignment.Center
             ) {
                 AsyncImage(
-                    model = doc.localImageUri.ifBlank { doc.cloudStorageUrl },
+                    model = previewModel,
                     contentDescription = "Document Image",
                     modifier = Modifier
                         .fillMaxSize()
@@ -210,6 +223,24 @@ fun DocumentInspectorScreen(
                         ),
                     contentScale = ContentScale.Fit
                 )
+
+                if (isPdf) {
+                    Surface(
+                        color = Color(0xFFE53935),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "PDF DOCUMENT",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
 
                 // Zoom hint badge
                 Surface(
@@ -243,29 +274,58 @@ fun DocumentInspectorScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Glowing Share Full-Resolution Document + Viral App Link Button
-            Button(
-                onClick = { ShareHelper.shareFullResolutionDocument(context, doc) },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue.copy(alpha = 0.22f)),
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, animatedNeonBorder),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
+            // Action Buttons Row: Open Original + Share Full-Res
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = null,
-                    tint = AccentCyan,
-                    modifier = Modifier.size(19.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Share Full-Res Original & App Link",
-                    color = AccentCyan,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
+                Button(
+                    onClick = { ShareHelper.openDocument(context, doc) },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentPurple.copy(alpha = 0.22f)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, AccentPurple.copy(alpha = 0.7f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInNew,
+                        contentDescription = null,
+                        tint = AccentPurple,
+                        modifier = Modifier.size(19.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isPdf) "Open PDF" else "Open Original",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+
+                Button(
+                    onClick = { ShareHelper.shareFullResolutionDocument(context, doc) },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue.copy(alpha = 0.22f)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, animatedNeonBorder),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .weight(1.3f)
+                        .height(50.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(19.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Share Full-Res",
+                        color = AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

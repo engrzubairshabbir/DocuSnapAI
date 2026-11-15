@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   X, ZoomIn, ZoomOut, Copy, Check, FileText, Pill, DollarSign, 
-  UserCheck, ChevronDown, ChevronUp, Plus, Tag, Sparkles, Trash2 
+  UserCheck, ChevronDown, ChevronUp, Plus, Tag, Sparkles, Trash2, ExternalLink 
 } from 'lucide-react';
 import { DocumentEntity, KeyEntities } from '../types.ts';
 import { AdSenseBanner } from './AdSenseBanner.tsx';
@@ -112,10 +112,37 @@ export const DocumentInspectorModal: React.FC<Props> = ({
 
         {/* Body (Split View) */}
         <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6 p-4 sm:p-6">
-          {/* Zoomable Image Container with Glowing Shimmer Border */}
-          <div className="flex flex-col space-y-2">
+          {/* Zoomable Image / Document Container with Glowing Shimmer Border */}
+          <div className="flex flex-col space-y-3">
             <div className="relative h-72 sm:h-96 bg-[#060A12] rounded-2xl border-2 border-cyan-500/40 hover:border-cyan-400 transition-colors shadow-[0_0_30px_rgba(0,245,255,0.15)] overflow-hidden flex items-center justify-center group">
-              {document.cloud_storage_url ? (
+              {document.document_type === 'PDF Document' ||
+              document.title?.toLowerCase().endsWith('.pdf') ||
+              document.cloud_storage_url?.toLowerCase().includes('.pdf') ||
+              document.cloud_storage_url?.startsWith('data:application/pdf') ? (
+                <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3">
+                  <div className="w-20 h-20 rounded-2xl bg-red-500/20 border border-red-500/40 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.3)]">
+                    <FileText className="w-10 h-10 text-red-400" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-red-500/20 text-red-300 border border-red-500/40">
+                      PDF Document
+                    </span>
+                    <p className="text-sm font-semibold text-white mt-2 max-w-xs truncate">{document.title}</p>
+                  </div>
+                  {document.cloud_storage_url && (
+                    <a
+                      href={document.cloud_storage_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={document.title || 'document.pdf'}
+                      className="px-4 py-2 bg-red-600/30 hover:bg-red-600/50 border border-red-400/80 rounded-xl text-red-200 text-xs font-bold transition-all shadow-[0_0_15px_rgba(239,68,68,0.3)] flex items-center space-x-1.5"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Open / Download Full PDF</span>
+                    </a>
+                  )}
+                </div>
+              ) : document.cloud_storage_url ? (
                 <div className="w-full h-full flex items-center justify-center overflow-auto cursor-grab active:cursor-grabbing p-2">
                   <img
                     src={document.cloud_storage_url}
@@ -127,32 +154,50 @@ export const DocumentInspectorModal: React.FC<Props> = ({
               ) : (
                 <div className="text-center p-6 text-gray-500">
                   <FileText className="w-16 h-16 mx-auto mb-2 opacity-50 text-cyan-400" />
-                  <p className="text-sm">No image preview available</p>
+                  <p className="text-sm">No preview available</p>
                 </div>
               )}
 
               {/* Zoom Controls Overlay */}
-              <div className="absolute bottom-3 right-3 flex items-center space-x-1 bg-black/75 backdrop-blur-md rounded-xl p-1.5 border border-cyan-500/40">
-                <button
-                  onClick={() => setZoom((z) => Math.min(z + 0.3, 3))}
-                  className="p-1.5 text-cyan-300 hover:text-white hover:bg-cyan-950/60 rounded-lg"
-                  title="Zoom In"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </button>
-                <span className="text-[11px] font-mono font-bold text-cyan-300 px-1">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  onClick={() => setZoom((z) => Math.max(z - 0.3, 0.8))}
-                  className="p-1.5 text-cyan-300 hover:text-white hover:bg-cyan-950/60 rounded-lg"
-                  title="Zoom Out"
-                >
-                  <ZoomOut className="w-4 h-4" />
-                </button>
-              </div>
+              {!(document.document_type === 'PDF Document' ||
+                document.title?.toLowerCase().endsWith('.pdf') ||
+                document.cloud_storage_url?.toLowerCase().includes('.pdf') ||
+                document.cloud_storage_url?.startsWith('data:application/pdf')) && (
+                <div className="absolute bottom-3 right-3 flex items-center space-x-1 bg-black/75 backdrop-blur-md rounded-xl p-1.5 border border-cyan-500/40">
+                  <button
+                    onClick={() => setZoom((z) => Math.min(z + 0.3, 3))}
+                    className="p-1.5 text-cyan-300 hover:text-white hover:bg-cyan-950/60 rounded-lg"
+                    title="Zoom In"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <span className="text-[11px] font-mono font-bold text-cyan-300 px-1">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button
+                    onClick={() => setZoom((z) => Math.max(z - 0.3, 0.8))}
+                    className="p-1.5 text-cyan-300 hover:text-white hover:bg-cyan-950/60 rounded-lg"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
-            <p className="text-[11px] text-gray-400 text-center font-medium">Use buttons to deep-zoom document</p>
+
+            {/* Direct Open / Download File Action */}
+            {document.cloud_storage_url && (
+              <a
+                href={document.cloud_storage_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={document.title || 'document'}
+                className="flex items-center justify-center space-x-2 w-full py-2.5 px-4 bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-400/50 rounded-xl text-cyan-200 text-xs font-bold transition-all shadow-[0_0_15px_rgba(0,245,255,0.2)]"
+              >
+                <ExternalLink className="w-4 h-4 text-cyan-400" />
+                <span>Open / Download Original File</span>
+              </a>
+            )}
           </div>
 
           {/* Details & Interactive Sections */}

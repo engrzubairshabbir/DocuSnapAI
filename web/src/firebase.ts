@@ -177,9 +177,12 @@ export function subscribeToDocuments(
 export async function saveDocument(userId: string, document: DocumentEntity): Promise<void> {
   try {
     const docRef = doc(db, 'users', userId, 'documents', document.id);
-    await setDoc(docRef, document, { merge: true });
+    const savePromise = setDoc(docRef, document, { merge: true });
+    // 4-second timeout to prevent network stalls
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore timeout')), 4000));
+    await Promise.race([savePromise, timeout]);
   } catch (e) {
-    console.warn('Could not save document to Firestore directly:', e);
+    console.warn('Could not save document to Firestore directly (offline or cached):', e);
   }
 }
 
@@ -198,8 +201,10 @@ export async function uploadImageAndThumbnail(
   fullBlob: Blob,
   thumbBlob: Blob
 ): Promise<{ fullUrl: string; thumbUrl: string }> {
-  try {
-    const fullRef = ref(storage, `users/${userId}/images/${docId}.jpg`);
+  const tryUpload = async () => {
+    const isPdf = fullBlob.type === 'application/pdf';
+    const ext = isPdf ? 'pdf' : 'jpg';
+    const fullRef = ref(storage, `users/${userId}/images/${docId}.${ext}`);
     const thumbRef = ref(storage, `users/${userId}/thumbs/${docId}.webp`);
 
     await uploadBytes(fullRef, fullBlob);
@@ -209,10 +214,33 @@ export async function uploadImageAndThumbnail(
     const thumbUrl = await getDownloadURL(thumbRef);
 
     return { fullUrl, thumbUrl };
+  };
+
+  // 5-second race timeout: prevents hanging when custom domain CORS or storage rules take time
+  const timeoutPromise = new Promise<{ fullUrl: string; thumbUrl: string }>((_, reject) => {
+    setTimeout(() => reject(new Error('Storage upload timeout')), 5000);
+  });
+
+  try {
+    return await Promise.race([tryUpload(), timeoutPromise]);
   } catch (e) {
-    console.warn('Storage upload fallback:', e);
-    const mockUrl = URL.createObjectURL(fullBlob);
-    return { fullUrl: mockUrl, thumbUrl: mockUrl };
+    console.warn('Storage upload timeout or CORS fallback to client-side persistent storage:', e);
+    const dataUrl = await blobToDataUrl(fullBlob);
+    const thumbUrl = await blobToDataUrl(thumbBlob);
+    return { fullUrl: dataUrl, thumbUrl: thumbUrl };
   }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve) => {
+    if (blob.size > 5 * 1024 * 1024) {
+      resolve(URL.createObjectURL(blob));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => resolve((reader.result as string) || URL.createObjectURL(blob));
+    reader.onerror = () => resolve(URL.createObjectURL(blob));
+    reader.readAsDataURL(blob);
+  });
 }
 

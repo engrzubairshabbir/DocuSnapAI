@@ -14,7 +14,7 @@ export interface DocumentEntity {
   raw_ocr_text: string;
   title: string;
   ai_summary: string;
-  document_type: 'Medical Prescription' | 'Expense Receipt' | 'Utility Bill' | 'Bank Slip' | 'General Document';
+  document_type: 'Medical Prescription' | 'Expense Receipt' | 'Utility Bill' | 'Bank Slip' | 'General Document' | 'PDF Document';
   key_entities_json: string;
   searchable_tags_json: string;
   date_detected: string;

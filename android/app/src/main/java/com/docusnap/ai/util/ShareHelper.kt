@@ -111,6 +111,63 @@ object ShareHelper {
         }
     }
 
+    /**
+     * Opens the original document file (PDF, Image, etc.) in an external reader/viewer
+     * via Android FileProvider.
+     */
+    fun openDocument(context: Context, doc: DocumentEntity) {
+        try {
+            val localUri = Uri.parse(doc.localImageUri)
+            var targetFile: File? = null
+
+            if (localUri.scheme == "file" && !localUri.path.isNullOrBlank()) {
+                val candidate = File(localUri.path!!)
+                if (candidate.exists() && candidate.length() > 0L) {
+                    targetFile = candidate
+                }
+            }
+
+            if (targetFile == null) {
+                val mime = context.contentResolver.getType(localUri)
+                val ext = mime?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) } 
+                    ?: if (doc.localImageUri.endsWith(".pdf", ignoreCase = true)) "pdf" else "jpg"
+                val cacheTarget = File(context.cacheDir, "view_${doc.id}.$ext")
+                context.contentResolver.openInputStream(localUri)?.use { input ->
+                    FileOutputStream(cacheTarget).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (cacheTarget.exists() && cacheTarget.length() > 0L) {
+                    targetFile = cacheTarget
+                }
+            }
+
+            if (targetFile == null) {
+                Toast.makeText(context, "Original document file not found on device", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val ext = targetFile.extension.lowercase(Locale.ROOT)
+            val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) 
+                ?: if (ext == "pdf") "application/pdf" else "image/*"
+            val contentUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                targetFile
+            )
+
+            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(contentUri, mimeType)
+                clipData = ClipData.newUri(context.contentResolver, doc.title, contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(viewIntent, "Open ${doc.title.ifBlank { "Document" }}"))
+        } catch (e: Exception) {
+            Toast.makeText(context, "Unable to open document: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun shareAppInvite(context: Context) {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"

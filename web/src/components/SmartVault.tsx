@@ -88,15 +88,28 @@ export const SmartVault: React.FC<Props> = ({ documents, onSelectDocument }) => 
               // Ignore
             }
 
+            const isPdfDoc = doc.document_type === 'PDF Document' ||
+              doc.title?.toLowerCase().endsWith('.pdf') ||
+              doc.cloud_storage_url?.toLowerCase().includes('.pdf') ||
+              doc.cloud_storage_url?.startsWith('data:application/pdf');
+
             return (
               <div
                 key={doc.id}
                 onClick={() => onSelectDocument(doc)}
                 className="bg-[#111827] border border-gray-800 hover:border-blue-500/50 rounded-2xl overflow-hidden group cursor-pointer transition-all hover:shadow-xl flex flex-col"
               >
-                {/* Image Banner */}
+                {/* Image / PDF Banner */}
                 <div className="relative h-44 bg-gray-900 overflow-hidden">
-                  {doc.cloud_storage_url ? (
+                  {isPdfDoc && doc.cloud_storage_url?.startsWith('data:application/pdf') ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-950/40 via-[#111827] to-red-950/20 p-4 text-center">
+                      <div className="w-12 h-12 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center mb-2">
+                        <FileText className="w-6 h-6 text-red-400" />
+                      </div>
+                      <span className="text-xs font-bold text-gray-200 line-clamp-1">{doc.title}</span>
+                      <span className="text-[10px] text-red-400 font-mono mt-0.5">PDF Document</span>
+                    </div>
+                  ) : doc.cloud_storage_url ? (
                     <img
                       src={doc.cloud_storage_url}
                       alt={doc.title}
@@ -108,7 +121,12 @@ export const SmartVault: React.FC<Props> = ({ documents, onSelectDocument }) => 
                     </div>
                   )}
 
-                  <div className="absolute top-2.5 left-2.5">
+                  <div className="absolute top-2.5 left-2.5 flex items-center space-x-1">
+                    {isPdfDoc && (
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-red-600 text-white shadow-sm">
+                        PDF
+                      </span>
+                    )}
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md ${
                         doc.document_type === 'Medical Prescription'
