@@ -12,7 +12,6 @@ import {
   ensureAuthUser, 
   subscribeToDocuments, 
   auth, 
-  DEMO_DOCUMENTS,
   loginWithGoogle,
   logoutUser
 } from './firebase.ts';
@@ -20,33 +19,16 @@ import { Sparkles, Folder, Cloud } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'search' | 'vault' | 'sync'>('search');
-  const [documents, setDocuments] = useState<DocumentEntity[]>(DEMO_DOCUMENTS);
+  const [documents, setDocuments] = useState<DocumentEntity[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<DocumentEntity | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [userId, setUserId] = useState<string>('guest-user-123');
+  const [userId, setUserId] = useState<string>('');
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
 
+  // 1. Maintain Firebase Auth session
   useEffect(() => {
-    // 1. Authenticate anonymously or resume session
-    ensureAuthUser().then((user) => {
-      if (user) {
-        setUserId(user.uid);
-        setIsAnonymous(user.isAnonymous);
-        setUserEmail(user.email);
-        setUserPhotoUrl(user.photoURL);
-
-        // 2. Subscribe to real-time updates from Firestore
-        const unsubscribe = subscribeToDocuments(user.uid, (updatedDocs) => {
-          setDocuments(updatedDocs);
-        });
-
-        return () => unsubscribe();
-      }
-    });
-
-    // Auth state changes
     const unsubAuth = auth.onAuthStateChanged((user) => {
       if (user) {
         setUserId(user.uid);
@@ -54,12 +36,29 @@ export const App: React.FC = () => {
         setUserEmail(user.email);
         setUserPhotoUrl(user.photoURL);
       } else {
-        setUserPhotoUrl(null);
+        ensureAuthUser().then((anon) => {
+          if (anon) {
+            setUserId(anon.uid);
+            setIsAnonymous(anon.isAnonymous);
+            setUserEmail(anon.email);
+            setUserPhotoUrl(anon.photoURL);
+          }
+        });
       }
     });
 
     return () => unsubAuth();
   }, []);
+
+  // 2. Subscribe to real-time updates from Firestore whenever userId changes
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = subscribeToDocuments(userId, (updatedDocs) => {
+      setDocuments(updatedDocs);
+    });
+
+    return () => unsubscribe();
+  }, [userId]);
 
   const handleDocumentAdded = (newDoc: DocumentEntity) => {
     setDocuments((prev) => [newDoc, ...prev]);

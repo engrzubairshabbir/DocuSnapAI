@@ -36,17 +36,25 @@ export const ConversationalSearch: React.FC<Props> = ({ documents, onSelectDocum
       return tokens.some((tok) => haystack.includes(tok));
     });
 
-    const candidates = filtered.length > 0 ? filtered : documents.slice(0, 6);
-    setMatchedDocs(candidates);
-
-    try {
-      const answer = await answerQueryWithGemini(searchQuery, candidates);
-      setAiAnswer(answer);
-    } catch (e) {
-      console.error(e);
-      setAiAnswer("Could not retrieve AI response. Check the matched documents below.");
-    } finally {
+    if (filtered.length > 0) {
+      setMatchedDocs(filtered);
+      try {
+        const answer = await answerQueryWithGemini(searchQuery, filtered);
+        setAiAnswer(answer);
+      } catch (e) {
+        console.error(e);
+        setAiAnswer("Retrieved matching documents below.");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setMatchedDocs([]);
       setLoading(false);
+      if (documents.length === 0) {
+        setAiAnswer(`Your Smart Vault has 0 documents synced from your phone yet. Please open DocuSnap AI on your mobile phone -> go to Settings -> tap "Push All Docs" to sync all gallery documents here.`);
+      } else {
+        setAiAnswer(`No documents matched "${searchQuery}" in your vault of ${documents.length} document(s). Try searching for other keywords from your receipts or bills.`);
+      }
     }
   };
 
@@ -65,7 +73,9 @@ export const ConversationalSearch: React.FC<Props> = ({ documents, onSelectDocum
           <div>
             <span className="text-xs font-bold text-white flex items-center space-x-1.5">
               <span>Remote Phone Smart Vault Connected</span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-md font-mono">LIVE SYNC</span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-md font-mono">
+                LIVE SYNC ({documents.length} Docs)
+              </span>
             </span>
             <p className="text-[11px] text-gray-400">Search all OCR text, prescriptions & bills indexed on your phone from any browser.</p>
           </div>
