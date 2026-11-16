@@ -135,13 +135,18 @@ export async function ensureAuthUser(): Promise<User | null> {
 
 export async function loginWithGoogle(): Promise<User | null> {
   const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
   try {
     const res = await signInWithPopup(auth, provider);
     return res.user;
   } catch (e: any) {
     console.error('Google sign in error:', e);
     if (e?.code === 'auth/unauthorized-domain') {
-      alert("Firebase Auth Domain Notice: Please add 'docusnap.consultways.com' to Firebase Console -> Authentication -> Settings -> Authorized Domains.");
+      alert("Firebase Domain Error: Please ensure 'docusnap.consultways.com' is saved in Firebase Console -> Authentication -> Settings -> Authorized Domains.");
+    } else if (e?.code === 'auth/operation-not-allowed') {
+      alert("Firebase Setup Needed: Google Sign-in provider is disabled in Firebase! Go to Firebase Console -> Authentication -> Sign-in method -> Click Google -> Enable -> Choose Support Email -> Save.");
+    } else if (e?.code !== 'auth/popup-closed-by-user') {
+      alert(`Google Sign-In Notice [${e?.code || 'error'}]: ${e?.message || 'Authentication window closed or blocked.'}`);
     }
     return null;
   }

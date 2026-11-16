@@ -82,12 +82,12 @@ export const Navbar: React.FC<Props> = ({
 
         {/* Action Button & Google Sign-In */}
         <div className="flex items-center space-x-2.5">
-          {/* Sign in with Google / Logged-in badge */}
+          {/* Sign in with Google / Logged-in profile badge */}
           {isAnonymous || !userEmail ? (
             <button
               onClick={onLoginGoogle}
-              className="px-3 py-2 bg-white hover:bg-gray-100 text-gray-800 text-xs font-semibold rounded-xl flex items-center space-x-2 shadow-md transition-all border border-gray-200"
-              title="Sign in with Google to sync all bills & Rx with your Android phone"
+              className="px-3.5 py-2 bg-white hover:bg-gray-100 text-gray-800 text-xs font-semibold rounded-xl flex items-center space-x-2 shadow-md transition-all border border-gray-200 active:scale-95"
+              title="Sign in with Google to sync all bills & Rx across phone & web"
             >
               <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -95,28 +95,59 @@ export const Navbar: React.FC<Props> = ({
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
-              <span className="hidden sm:inline">Sign in with Google</span>
-              <span className="sm:hidden">Sign In</span>
+              <span className="hidden sm:inline font-medium">Sign in with Google</span>
+              <span className="sm:hidden font-medium">Sign In</span>
             </button>
           ) : (
-            <div className="flex items-center space-x-2 bg-[#1F2937]/90 border border-gray-700/80 px-2.5 py-1.5 rounded-xl">
-              {userPhotoUrl ? (
-                <img src={userPhotoUrl} alt="Avatar" className="w-6 h-6 rounded-full border border-blue-400" />
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-blue-600 text-[11px] font-bold text-white flex items-center justify-center">
-                  {userEmail[0].toUpperCase()}
-                </div>
-              )}
-              <span className="text-xs text-gray-200 font-medium hidden md:inline max-w-[120px] truncate">
-                {userEmail}
-              </span>
+            <div 
+              className="group relative flex items-center space-x-2 bg-[#172033] hover:bg-[#1E293B] border border-blue-500/30 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm"
+              title={`Logged in as: ${userEmail}`}
+            >
+              {/* User Avatar with Green Online Sync Dot */}
+              <div className="relative">
+                {userPhotoUrl ? (
+                  <img 
+                    src={userPhotoUrl} 
+                    alt="Google Profile" 
+                    className="w-7 h-7 rounded-full object-cover border-2 border-emerald-400 shadow-sm"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-xs font-bold text-white flex items-center justify-center border-2 border-emerald-400">
+                    {userEmail[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-400 border border-[#0B0F19] rounded-full" />
+              </div>
+
+              {/* Truncated Email Display */}
+              <div className="flex flex-col text-left max-w-[130px] sm:max-w-[160px]">
+                <span className="text-[10px] text-emerald-400 font-semibold tracking-wide uppercase leading-tight">
+                  Google Sync
+                </span>
+                <span className="text-xs text-gray-200 font-medium truncate">
+                  {userEmail}
+                </span>
+              </div>
+
+              {/* Log Out Action */}
               <button
-                onClick={onLogout}
-                className="text-[11px] text-gray-400 hover:text-red-400 transition-colors p-1"
-                title="Sign Out"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLogout();
+                }}
+                className="ml-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded-lg transition-all"
+                title="Log Out / Disconnect"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-4 h-4" />
               </button>
+
+              {/* Hover Tooltip Popup showing Full Email */}
+              <div className="absolute right-0 top-full mt-2 hidden group-hover:flex flex-col bg-[#111827] border border-gray-700 rounded-xl p-3 shadow-2xl z-50 min-w-[200px] pointer-events-none">
+                <span className="text-[11px] text-gray-400">Connected Google Account:</span>
+                <span className="text-xs font-semibold text-white break-all">{userEmail}</span>
+                <span className="text-[10px] text-emerald-400 mt-1">● Vault Auto-Sync Active</span>
+              </div>
             </div>
           )}
 
