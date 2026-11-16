@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
             MediaObserverService.start(this)
             MediaObserverService.scheduleContentUriTrigger(this)
             MediaObserverService.schedulePeriodicScan(this)
-            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 30)
+            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 5000)
         }
     }
 
@@ -174,8 +174,8 @@ class MainActivity : ComponentActivity() {
             MediaObserverService.start(this)
             MediaObserverService.scheduleContentUriTrigger(this)
             MediaObserverService.schedulePeriodicScan(this)
-            // Permission already granted on subsequent launches: trigger recent scan
-            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 50)
+            // Permission already granted on subsequent launches: trigger deep gallery scan
+            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 5000)
         }
     }
 }

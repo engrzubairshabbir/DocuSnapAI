@@ -229,7 +229,11 @@ class DocuSnapViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun scanGallery() {
-        com.docusnap.ai.service.MediaIngestionWorker.enqueueScan(getApplication(), scanRecentLimit = 50)
+        com.docusnap.ai.service.MediaIngestionWorker.enqueueScan(getApplication(), scanRecentLimit = 5000)
+    }
+
+    fun scanFullGallery() {
+        com.docusnap.ai.service.MediaIngestionWorker.enqueueScan(getApplication(), scanRecentLimit = 5000)
     }
 
     fun deleteDocument(id: String) {

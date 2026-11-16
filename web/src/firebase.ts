@@ -261,3 +261,36 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * On-demand media fetch: Tells the mobile phone to upload the full-resolution photo for docId.
+ */
+export function requestMediaFromPhone(
+  userId: string,
+  docId: string,
+  onResolved: (url: string | null, error?: string) => void
+): () => void {
+  try {
+    const reqRef = doc(db, 'users', userId, 'media_requests', docId);
+    setDoc(reqRef, {
+      docId,
+      status: 'PENDING',
+      requestedAt: Date.now()
+    }, { merge: true });
+
+    const unsubscribe = onSnapshot(reqRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      if (data?.status === 'COMPLETED' && data.cloud_storage_url) {
+        onResolved(data.cloud_storage_url);
+      } else if (data?.status === 'FAILED') {
+        onResolved(null, data.error || 'Failed to retrieve image from phone.');
+      }
+    });
+
+    return unsubscribe;
+  } catch (err: any) {
+    onResolved(null, err?.message || 'Request failed');
+    return () => {};
+  }
+}
+

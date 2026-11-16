@@ -335,6 +335,22 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                Button(
+                    onClick = {
+                        viewModel.scanFullGallery()
+                        Toast.makeText(context, "Scanning entire gallery in background (Low CPU)...", Toast.LENGTH_LONG).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Scan Entire Gallery ($totalCount Indexed)", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 OutlinedButton(
                     onClick = {
                         try {

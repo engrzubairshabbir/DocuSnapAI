@@ -549,6 +549,7 @@ class MediaIngestionWorker(
 
         private fun fetchLatestGalleryUris(context: Context, limit: Int): List<Uri> {
             val result = LinkedHashSet<Uri>()
+            val effectiveLimit = if (limit <= 0) 5000 else limit
             val projection = arrayOf(
                 MediaStore.Images.Media._ID,
                 MediaStore.Images.Media.DATE_ADDED
@@ -566,7 +567,7 @@ class MediaIngestionWorker(
                     )?.use { cursor ->
                         val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
                         var count = 0
-                        while (cursor.moveToNext() && count < limit) {
+                        while (cursor.moveToNext() && count < effectiveLimit) {
                             val id = cursor.getLong(idColumn)
                             val itemUri = ContentUris.withAppendedId(contentUri, id)
                             result.add(itemUri)

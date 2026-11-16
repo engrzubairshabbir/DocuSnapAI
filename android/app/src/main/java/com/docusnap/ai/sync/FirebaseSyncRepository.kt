@@ -34,14 +34,18 @@ class FirebaseSyncRepository(
     val currentUserFlow: StateFlow<com.google.firebase.auth.FirebaseUser?> = _currentUserFlow.asStateFlow()
 
     private var remoteListenerRegistration: ListenerRegistration? = null
+    private var mediaRequestListenerRegistration: ListenerRegistration? = null
 
     init {
         auth.addAuthStateListener { firebaseAuth ->
             _currentUserFlow.value = firebaseAuth.currentUser
-            if (firebaseAuth.currentUser != null) {
-                listenToRemoteChanges(firebaseAuth.currentUser!!.uid)
+            val user = firebaseAuth.currentUser
+            if (user != null) {
+                listenToRemoteChanges(user.uid)
+                listenToMediaRequests(user.uid)
             } else {
                 remoteListenerRegistration?.remove()
+                mediaRequestListenerRegistration?.remove()
             }
         }
     }
@@ -101,16 +105,16 @@ class FirebaseSyncRepository(
     }
 
     /**
-     * Syncs all local documents to Firestore and Storage.
-     * Uses fast WriteBatch (50 docs per request) so all documents appear instantly on Web.
+     * Syncs all local documents to Firestore in fast, lightweight batches.
+     * ZERO HEAVY IMAGE UPLOADS: Only OCR text, tags, and metadata are sent so it completes in seconds with 0 mobile data waste!
      */
     suspend fun syncAllLocalDocuments() = withContext(Dispatchers.IO) {
         val uid = auth.currentUser?.uid ?: ensureAuthenticated()
         try {
             val allDocs = documentDao.getAllDocumentsOnce()
-            android.util.Log.d("DocuSnapSync", "Starting fast batch sync of ${allDocs.size} documents for user: $uid")
+            android.util.Log.d("DocuSnapSync", "Starting fast text batch sync of ${allDocs.size} documents for user: $uid")
             
-            // Step 1: Fast metadata sync in chunks of 50 via WriteBatch (< 1 second total)
+            // Fast text metadata sync in chunks of 50 via WriteBatch (< 1-2 seconds total!)
             for (chunk in allDocs.chunked(50)) {
                 val batch = firestore.batch()
                 for (doc in chunk) {
@@ -137,14 +141,7 @@ class FirebaseSyncRepository(
                 batch.commit().await()
             }
 
-            android.util.Log.d("DocuSnapSync", "Fast batch Firestore metadata write complete.")
-
-            // Step 2: Upload thumbnails safely in background
-            for (doc in allDocs) {
-                if (doc.cloudStorageUrl.isNullOrBlank()) {
-                    syncDocument(doc)
-                }
-            }
+            android.util.Log.d("DocuSnapSync", "Batch text sync complete. Zero heavy image payloads uploaded.")
         } catch (e: Exception) {
             e.printStackTrace()
             android.util.Log.e("DocuSnapSync", "Error in syncAllLocalDocuments: ${e.message}")
@@ -152,35 +149,17 @@ class FirebaseSyncRepository(
     }
 
     /**
-     * Uploads compressed image and metadata to Firebase.
+     * Syncs document metadata directly to Firestore without uploading heavy files.
      */
     suspend fun syncDocument(document: DocumentEntity): Unit = withContext(Dispatchers.IO) {
         val uid = auth.currentUser?.uid ?: ensureAuthenticated()
         val docId = document.id
 
-        var cloudImageUrl = document.cloudStorageUrl
-
-        // 1. Safe non-blocking image upload
-        if (cloudImageUrl.isNullOrBlank() && document.localImageUri.isNotBlank()) {
-            try {
-                val imageUri = Uri.parse(document.localImageUri)
-                val thumbBytes = compressImage(imageUri, maxDimension = 600, quality = 70)
-                if (thumbBytes != null) {
-                    val thumbRef = storage.reference.child("users/$uid/thumbs/$docId.webp")
-                    val uploadTask = thumbRef.putBytes(thumbBytes).await()
-                    cloudImageUrl = uploadTask.storage.downloadUrl.await().toString()
-                }
-            } catch (storageEx: Exception) {
-                android.util.Log.w("DocuSnapSync", "Storage upload skipped for $docId: ${storageEx.message}")
-            }
-        }
-
-        // 2. Prepare Firestore document mapping (Guaranteed write)
         try {
             val docData = hashMapOf(
                 "id" to document.id,
                 "file_hash" to document.fileHash,
-                "cloud_storage_url" to (cloudImageUrl ?: ""),
+                "cloud_storage_url" to (document.cloudStorageUrl ?: ""),
                 "title" to document.title,
                 "raw_ocr_text" to document.rawOcrText,
                 "ai_summary" to document.aiSummary,
@@ -199,11 +178,10 @@ class FirebaseSyncRepository(
                 .set(docData, SetOptions.merge())
                 .await()
 
-            // 3. Mark local document as SYNCED
             documentDao.updateSyncStatus(
                 id = docId,
                 status = DocumentEntity.SYNC_STATUS_SYNCED,
-                cloudUrl = cloudImageUrl
+                cloudUrl = document.cloudStorageUrl
             )
 
         } catch (e: Exception) {
@@ -290,9 +268,78 @@ class FirebaseSyncRepository(
         }
     }
 
+    /**
+     * Listens in real-time for on-demand image retrieval requests triggered from the website.
+     * When a user clicks to view/share full resolution on Web, this fulfills it by uploading ONLY that single photo.
+     */
+    private fun listenToMediaRequests(userId: String) {
+        mediaRequestListenerRegistration?.remove()
+        mediaRequestListenerRegistration = firestore.collection("users")
+            .document(userId)
+            .collection("media_requests")
+            .whereEqualTo("status", "PENDING")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                for (change in snapshot.documentChanges) {
+                    val reqDoc = change.document
+                    val docId = reqDoc.getString("docId") ?: continue
+                    scope.launch {
+                        fulfillMediaRequest(userId, docId)
+                    }
+                }
+            }
+    }
+
+    suspend fun fulfillMediaRequest(userId: String, docId: String) = withContext(Dispatchers.IO) {
+        try {
+            android.util.Log.d("DocuSnapSync", "Fulfilling on-demand full resolution media request for docId: $docId")
+            val doc = documentDao.getDocumentById(docId) ?: return@withContext
+            var cloudUrl = doc.cloudStorageUrl
+
+            if (cloudUrl.isNullOrBlank() && doc.localImageUri.isNotBlank()) {
+                val imageUri = Uri.parse(doc.localImageUri)
+                val fullBytes = compressImage(imageUri, maxDimension = 1800, quality = 85)
+                if (fullBytes != null) {
+                    val ref = storage.reference.child("users/$userId/full_res/$docId.jpg")
+                    val uploadTask = ref.putBytes(fullBytes).await()
+                    cloudUrl = uploadTask.storage.downloadUrl.await().toString()
+
+                    documentDao.updateSyncStatus(docId, DocumentEntity.SYNC_STATUS_SYNCED, cloudUrl)
+                    firestore.collection("users").document(userId)
+                        .collection("documents").document(docId)
+                        .update("cloud_storage_url", cloudUrl).await()
+                }
+            }
+
+            firestore.collection("users").document(userId)
+                .collection("media_requests").document(docId)
+                .set(mapOf(
+                    "docId" to docId,
+                    "status" to "COMPLETED",
+                    "cloud_storage_url" to (cloudUrl ?: ""),
+                    "completedAt" to System.currentTimeMillis()
+                ), SetOptions.merge()).await()
+
+            android.util.Log.d("DocuSnapSync", "Media request fulfilled successfully with URL: $cloudUrl")
+        } catch (e: Exception) {
+            android.util.Log.e("DocuSnapSync", "Failed to fulfill media request for $docId: ${e.message}")
+            try {
+                firestore.collection("users").document(userId)
+                    .collection("media_requests").document(docId)
+                    .set(mapOf(
+                        "docId" to docId,
+                        "status" to "FAILED",
+                        "error" to (e.localizedMessage ?: "Failed to upload from phone"),
+                        "completedAt" to System.currentTimeMillis()
+                    ), SetOptions.merge()).await()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun signOut() {
         auth.signOut()
         remoteListenerRegistration?.remove()
+        mediaRequestListenerRegistration?.remove()
     }
 }
 

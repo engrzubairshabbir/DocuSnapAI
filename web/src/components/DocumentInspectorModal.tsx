@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { 
   X, ZoomIn, ZoomOut, Copy, Check, FileText, Pill, DollarSign, 
   UserCheck, ChevronDown, ChevronUp, Plus, Tag, Sparkles, Trash2, ExternalLink,
-  Share2, Download
+  Share2, Download, Smartphone
 } from 'lucide-react';
 import { DocumentEntity, KeyEntities } from '../types.ts';
 import { AdSenseBanner } from './AdSenseBanner.tsx';
+import { requestMediaFromPhone, auth } from '../firebase.ts';
 
 interface Props {
   document: DocumentEntity | null;
@@ -26,18 +27,55 @@ export const DocumentInspectorModal: React.FC<Props> = ({
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
+  const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(document?.cloud_storage_url || null);
+  const [fetchingFromPhone, setFetchingFromPhone] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   if (!document) return null;
+
+  const effectiveImageUrl = resolvedImageUrl || document.cloud_storage_url;
+
+  const handleFetchFromPhone = () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      alert("Please sign in with Google to retrieve photos from your mobile phone.");
+      return;
+    }
+    setFetchingFromPhone(true);
+    setFetchError(null);
+
+    const unsub = requestMediaFromPhone(uid, document.id, (url, err) => {
+      setFetchingFromPhone(false);
+      if (url) {
+        setResolvedImageUrl(url);
+        onUpdate?.({ ...document, cloud_storage_url: url });
+      } else if (err) {
+        setFetchError(err);
+      }
+    });
+
+    setTimeout(() => {
+      setFetchingFromPhone((f) => {
+        if (f) {
+          setFetchError("Phone did not respond within 25s. Please ensure phone app is open and connected to internet.");
+          return false;
+        }
+        return false;
+      });
+      unsub();
+    }, 25000);
+  };
 
   const handleShareDocument = async () => {
     const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.docusnap.ai';
     const webVaultUrl = 'https://docusnap.consultways.com';
+    const activeUrl = effectiveImageUrl || webVaultUrl;
     const shareText = `📄 DocuSnap AI Smart Vault Document\n\n` +
       `📌 Title: ${document.title}\n` +
       `📁 Type: ${document.document_type}\n` +
       `📅 Date: ${document.date_detected}\n` +
       `💡 Summary: ${document.ai_summary || 'Indexed via DocuSnap AI'}\n\n` +
-      `🔗 View Document: ${document.cloud_storage_url || webVaultUrl}\n\n` +
+      `🔗 View Document: ${activeUrl}\n\n` +
       `⚡ Scanned and organized seamlessly with DocuSnap AI: Bill & Rx Finder.\n` +
       `📲 Download on Google Play Store: ${playStoreUrl}`;
 
@@ -174,27 +212,56 @@ export const DocumentInspectorModal: React.FC<Props> = ({
                     </a>
                   )}
                 </div>
-              ) : document.cloud_storage_url ? (
+              ) : effectiveImageUrl ? (
                 <div className="w-full h-full flex items-center justify-center overflow-auto cursor-grab active:cursor-grabbing p-2">
                   <img
-                    src={document.cloud_storage_url}
+                    src={effectiveImageUrl}
                     alt={document.title}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
                     className="max-w-full max-h-full object-contain transition-transform duration-200"
                   />
                 </div>
               ) : (
-                <div className="text-center p-6 text-gray-500">
-                  <FileText className="w-16 h-16 mx-auto mb-2 opacity-50 text-cyan-400" />
-                  <p className="text-sm">No preview available</p>
+                <div className="text-center p-6 flex flex-col items-center justify-center space-y-3">
+                  <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-400/40 flex items-center justify-center shadow-[0_0_20px_rgba(0,245,255,0.2)]">
+                    <Smartphone className="w-8 h-8 text-cyan-400" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-gray-200">
+                      Hi-Res Image on Android Phone
+                    </span>
+                    <p className="text-[11px] text-gray-400 max-w-xs mt-1">
+                      OCR text is fully indexed. Tap below to fetch the original photo from your mobile phone.
+                    </p>
+                  </div>
+                  {fetchError && (
+                    <span className="text-[11px] text-red-400 max-w-xs">{fetchError}</span>
+                  )}
+                  <button
+                    onClick={handleFetchFromPhone}
+                    disabled={fetchingFromPhone}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(0,245,255,0.3)] transition-all flex items-center space-x-2"
+                  >
+                    {fetchingFromPhone ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Fetching from Phone...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Retrieve Full Image from Phone</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
 
               {/* Zoom Controls Overlay */}
               {!(document.document_type === 'PDF Document' ||
                 document.title?.toLowerCase().endsWith('.pdf') ||
-                document.cloud_storage_url?.toLowerCase().includes('.pdf') ||
-                document.cloud_storage_url?.startsWith('data:application/pdf')) && (
+                effectiveImageUrl?.toLowerCase().includes('.pdf') ||
+                effectiveImageUrl?.startsWith('data:application/pdf')) && effectiveImageUrl && (
                 <div className="absolute bottom-3 right-3 flex items-center space-x-1 bg-black/75 backdrop-blur-md rounded-xl p-1.5 border border-cyan-500/40">
                   <button
                     onClick={() => setZoom((z) => Math.min(z + 0.3, 3))}
@@ -218,9 +285,9 @@ export const DocumentInspectorModal: React.FC<Props> = ({
             </div>
 
             {/* Direct Open / Download File Action */}
-            {document.cloud_storage_url && (
+            {effectiveImageUrl ? (
               <a
-                href={document.cloud_storage_url}
+                href={effectiveImageUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 download={document.title || 'document'}
@@ -229,6 +296,15 @@ export const DocumentInspectorModal: React.FC<Props> = ({
                 <ExternalLink className="w-4 h-4 text-cyan-400" />
                 <span>Open / Download Original File</span>
               </a>
+            ) : (
+              <button
+                onClick={handleFetchFromPhone}
+                disabled={fetchingFromPhone}
+                className="flex items-center justify-center space-x-2 w-full py-2.5 px-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-400/50 rounded-xl text-blue-200 text-xs font-bold transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+              >
+                <Smartphone className="w-4 h-4 text-cyan-400" />
+                <span>{fetchingFromPhone ? 'Retrieving from Phone...' : 'Retrieve Full Resolution from Phone'}</span>
+              </button>
             )}
           </div>
 
@@ -417,9 +493,9 @@ export const DocumentInspectorModal: React.FC<Props> = ({
             </button>
 
             {/* Direct Save to Device */}
-            {document.cloud_storage_url && (
+            {effectiveImageUrl ? (
               <a
-                href={document.cloud_storage_url}
+                href={effectiveImageUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 download={document.title || 'document'}
@@ -429,6 +505,16 @@ export const DocumentInspectorModal: React.FC<Props> = ({
                 <Download className="w-3.5 h-3.5 text-blue-400" />
                 <span>Save to Device</span>
               </a>
+            ) : (
+              <button
+                onClick={handleFetchFromPhone}
+                disabled={fetchingFromPhone}
+                className="px-3.5 py-2 bg-blue-900/30 hover:bg-blue-900/50 text-cyan-300 border border-cyan-500/40 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5"
+                title="Fetch full resolution photo from your phone"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{fetchingFromPhone ? 'Fetching...' : 'Fetch Photo'}</span>
+              </button>
             )}
 
             {onDelete && (
