@@ -581,6 +581,180 @@ class MediaIngestionWorker(
             return result.toList()
         }
 
+        fun queryTotalGalleryCount(context: Context): Int {
+            return try {
+                context.contentResolver.query(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.Images.Media._ID),
+                    null,
+                    null,
+                    null
+                )?.use { it.count } ?: 0
+            } catch (_: Exception) {
+                0
+            }
+        }
+
+        fun isPartialPhotoAccess(context: Context): Boolean {
+            return if (Build.VERSION.SDK_INT >= 34) {
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.READ_MEDIA_IMAGES
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else {
+                false
+            }
+        }
+
+        /**
+         * Processes a targeted batch of gallery photos (default 50).
+         * Runs on-device OCR, generates micro thumbnails, saves to Room, and returns the newly ingested documents.
+         */
+        suspend fun processBatch(
+            context: Context,
+            batchSize: Int = 50,
+            offset: Int = 0
+        ): List<DocumentEntity> = withContext(Dispatchers.IO) {
+            val app = context.applicationContext as DocuSnapApplication
+            val ocr = OcrEngine(app)
+            val gemini = GeminiReasoningEngine()
+            val dao = app.database.documentDao()
+            val sync = app.syncRepository
+
+            val targets = fetchGalleryBatchUris(app, limit = batchSize, offset = offset)
+            val newlyCreated = mutableListOf<DocumentEntity>()
+
+            for (uri in targets) {
+                try {
+                    val fileHash = computeSha256(app, uri)
+                    if (fileHash != null && dao.getDocumentByHash(fileHash) != null) {
+                        // Already indexed! Skip in < 1ms
+                        continue
+                    }
+
+                    val docId = UUID.randomUUID().toString()
+                    val isScreenshot = isScreenshotUri(app, uri)
+                    val isCamera = isCameraUri(app, uri)
+                    val isPdf = isPdfUri(app, uri)
+                    val pdfPageBitmap = if (isPdf) renderPdfFirstPage(app, uri) else null
+
+                    var rawOcrText = if (isPdf && pdfPageBitmap != null) {
+                        ocr.recognizeText(pdfPageBitmap)
+                    } else {
+                        ocr.recognizeText(uri)
+                    }
+
+                    if (rawOcrText.trim().length >= 4 || isScreenshot || isCamera || isPdf) {
+                        val semantic = if (rawOcrText.trim().length >= 4) {
+                            gemini.analyzeDocument(rawOcrText)
+                        } else {
+                            val todayLabel = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+                            GeminiExtractionResult(
+                                documentType = if (isPdf) DocumentEntity.TYPE_UTILITY else DocumentEntity.TYPE_GENERAL,
+                                title = "Photo Document ($todayLabel)",
+                                summary = "Auto-saved photo document in Smart Vault.",
+                                keyEntities = KeyEntities(date = todayLabel.substring(0, 10)),
+                                searchableTags = listOf("photo", "gallery", "vault")
+                            )
+                        }
+
+                        val localRefUri = generateThumbnailAndReference(app, uri, docId, pdfPageBitmap)
+                        val mergedTags = LinkedHashSet<String>().apply {
+                            addAll(semantic.searchableTags)
+                            if (isScreenshot) add("screenshot")
+                            if (isCamera) add("camera")
+                            if (isPdf) add("pdf")
+                        }
+                        val tagsJson = org.json.JSONArray().apply {
+                            mergedTags.forEach { put(it) }
+                        }.toString()
+
+                        val entity = DocumentEntity(
+                            id = docId,
+                            fileHash = fileHash ?: UUID.randomUUID().toString(),
+                            localImageUri = localRefUri,
+                            cloudStorageUrl = null,
+                            rawOcrText = rawOcrText,
+                            title = semantic.title,
+                            aiSummary = semantic.summary,
+                            documentType = semantic.documentType,
+                            keyEntitiesJson = semantic.keyEntities.toJson(),
+                            searchableTagsJson = tagsJson,
+                            dateDetected = semantic.keyEntities.date.ifBlank {
+                                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                            },
+                            syncStatus = DocumentEntity.SYNC_STATUS_PENDING_SYNC,
+                            timestamp = System.currentTimeMillis()
+                        )
+
+                        dao.insertDocument(entity)
+                        newlyCreated.add(entity)
+
+                        // Gentle throttle to keep device cool and zero CPU impact
+                        kotlinx.coroutines.delay(12)
+                    }
+                } catch (e: Exception) {
+                    Log.e("DocuSnapIngestion", "Error in batch item $uri: ${e.message}")
+                }
+            }
+
+            newlyCreated
+        }
+
+        private fun fetchGalleryBatchUris(context: Context, limit: Int, offset: Int): List<Uri> {
+            val result = mutableListOf<Uri>()
+            val projection = arrayOf(
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DATE_ADDED
+            )
+            val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC, ${MediaStore.Images.Media._ID} DESC"
+
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val queryArgs = android.os.Bundle().apply {
+                        putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, limit)
+                        putInt(android.content.ContentResolver.QUERY_ARG_OFFSET, offset)
+                        putStringArray(android.content.ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media._ID))
+                        putInt(android.content.ContentResolver.QUERY_ARG_SORT_DIRECTION, android.content.ContentResolver.QUERY_SORT_DIRECTION_DESCENDING)
+                    }
+                    context.contentResolver.query(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        projection,
+                        queryArgs,
+                        null
+                    )?.use { cursor ->
+                        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getLong(idColumn)
+                            result.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id))
+                        }
+                    }
+                } else {
+                    val sortWithLimit = "$sortOrder LIMIT $limit OFFSET $offset"
+                    context.contentResolver.query(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        projection,
+                        null,
+                        null,
+                        sortWithLimit
+                    )?.use { cursor ->
+                        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getLong(idColumn)
+                            result.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id))
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("DocuSnapIngestion", "Error in fetchGalleryBatchUris", e)
+            }
+            return result
+        }
+
         private fun computeSha256(context: Context, uri: Uri): String? {
             return try {
                 val digest = MessageDigest.getInstance("SHA-256")

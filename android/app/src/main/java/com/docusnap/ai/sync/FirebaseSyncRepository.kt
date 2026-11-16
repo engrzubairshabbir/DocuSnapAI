@@ -149,6 +149,44 @@ class FirebaseSyncRepository(
     }
 
     /**
+     * Fast batch push of newly processed documents' OCR text to Firestore.
+     */
+    suspend fun syncBatchDocuments(documents: List<DocumentEntity>) = withContext(Dispatchers.IO) {
+        val uid = auth.currentUser?.uid ?: ensureAuthenticated()
+        try {
+            for (chunk in documents.chunked(50)) {
+                val batch = firestore.batch()
+                for (doc in chunk) {
+                    val docRef = firestore.collection("users")
+                        .document(uid)
+                        .collection("documents")
+                        .document(doc.id)
+                    val docData = hashMapOf(
+                        "id" to doc.id,
+                        "file_hash" to doc.fileHash,
+                        "cloud_storage_url" to (doc.cloudStorageUrl ?: ""),
+                        "title" to doc.title,
+                        "raw_ocr_text" to doc.rawOcrText,
+                        "ai_summary" to doc.aiSummary,
+                        "document_type" to doc.documentType,
+                        "key_entities_json" to doc.keyEntitiesJson,
+                        "searchable_tags_json" to doc.searchableTagsJson,
+                        "date_detected" to doc.dateDetected,
+                        "timestamp" to doc.timestamp,
+                        "sync_status" to DocumentEntity.SYNC_STATUS_SYNCED
+                    )
+                    batch.set(docRef, docData, SetOptions.merge())
+                }
+                batch.commit().await()
+            }
+            android.util.Log.d("DocuSnapSync", "Auto-synced ${documents.size} OCR texts to web vault!")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            android.util.Log.e("DocuSnapSync", "Error auto-syncing batch: ${e.message}")
+        }
+    }
+
+    /**
      * Syncs document metadata directly to Firestore without uploading heavy files.
      */
     suspend fun syncDocument(document: DocumentEntity): Unit = withContext(Dispatchers.IO) {

@@ -58,6 +58,7 @@ fun ConversationalSearchScreen(
     val searchState by viewModel.searchState.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
     val balanceCents by viewModel.balanceCents.collectAsState()
+    val scanProgress by viewModel.scanProgress.collectAsState()
     var inputQuery by remember { mutableStateOf("") }
     var showLanguageDialog by remember { mutableStateOf(false) }
 
@@ -297,7 +298,60 @@ fun ConversationalSearchScreen(
             }
         }
 
-        if (!hasFullMediaAccess) {
+        if (scanProgress.isLimitedAccess) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                color = AccentAmber.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentAmber.copy(alpha = 0.7f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        try {
+                            val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = android.net.Uri.fromParts("package", context.packageName, null)
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                fullMediaPermLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                            }
+                        }
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = AccentAmber,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Limited Photo Access Active (${scanProgress.totalGalleryCount} photos)",
+                            color = AccentAmber,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Tap to choose 'Allow all' in App Settings to index full gallery",
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = AccentAmber,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        } else if (!hasFullMediaAccess) {
             Spacer(modifier = Modifier.height(10.dp))
             Surface(
                 color = AccentCyan.copy(alpha = 0.12f),
@@ -306,6 +360,7 @@ fun ConversationalSearchScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
+                        Toast.makeText(context, "Please select 'Allow all' when prompted", Toast.LENGTH_LONG).show()
                         val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             Manifest.permission.READ_MEDIA_IMAGES
                         } else {

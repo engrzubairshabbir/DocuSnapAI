@@ -53,6 +53,7 @@ fun SettingsScreen(
     val effectiveMaxDocs = maxOf(activeTier.maxDocuments, OneTimeSku.maxDocsForAmount(lifetimeUsd))
     val totalCount by viewModel.totalDocumentCount.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
+    val scanProgress by viewModel.scanProgress.collectAsState()
 
     var showLanguageDialog by remember { mutableStateOf(false) }
 
@@ -333,21 +334,188 @@ fun SettingsScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
-                    onClick = {
-                        viewModel.scanFullGallery()
-                        Toast.makeText(context, "Scanning entire gallery in background (Low CPU)...", Toast.LENGTH_LONG).show()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Scan Entire Gallery ($totalCount Indexed)", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                // LIMITED ACCESS WARNING CARD (Android 14+ Partial Permission Alert)
+                if (scanProgress.isLimitedAccess) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AccentAmber.copy(alpha = 0.12f)),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentAmber),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Limited Photo Access Active", color = AccentAmber, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Android is currently allowing only ${scanProgress.totalGalleryCount} photos because 'Allow limited access' was selected. Tap below to choose 'Allow all' so your entire gallery and bills can be indexed.",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = Uri.fromParts("package", context.packageName, null)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Open Settings: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentAmber),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Grant 'Allow All' in App Settings", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
                 }
+
+                // CONTINUOUS AUTOMATED GALLERY SYNC CARD (50 IMAGES PER BATCH + 2 MIN COOLDOWN)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = CardDark),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (scanProgress.isScanning) AccentCyan else BorderDark
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoLibrary,
+                                    contentDescription = null,
+                                    tint = if (scanProgress.isScanning) AccentCyan else TextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Auto-Batch Gallery Sync",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            Surface(
+                                color = if (scanProgress.isScanning) AccentCyan.copy(alpha = 0.2f) else SurfaceDark,
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (scanProgress.isScanning) AccentCyan else BorderDark)
+                            ) {
+                                Text(
+                                    text = "${scanProgress.percent}%",
+                                    color = if (scanProgress.isScanning) AccentCyan else TextSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        LinearProgressIndicator(
+                            progress = { (scanProgress.percent / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = AccentCyan,
+                            trackColor = SurfaceDark
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "${scanProgress.indexedCount} / ${scanProgress.totalGalleryCount} Photos Indexed",
+                                color = TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (scanProgress.isCoolingDown) {
+                                Text(
+                                    text = "Cooldown: ${scanProgress.cooldownRemainingSec}s",
+                                    color = AccentAmber,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = scanProgress.statusMessage,
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (scanProgress.isScanning) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (scanProgress.isCoolingDown) {
+                                    Button(
+                                        onClick = { viewModel.skipCooldownAndContinue() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = AccentAmber),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.FastForward, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Skip 2m Pause", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.stopContinuousGalleryScan() },
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(if (scanProgress.isCoolingDown) 0.8f else 1f)
+                                ) {
+                                    Icon(Icons.Default.Pause, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Pause", color = TextSecondary, fontSize = 11.sp)
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    viewModel.startContinuousGalleryScan()
+                                    Toast.makeText(context, "Starting automated gallery sync (50 at a time)...", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Start Auto-Batch Gallery Sync (50/batch)", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Spacer(modifier = Modifier.height(10.dp))
 

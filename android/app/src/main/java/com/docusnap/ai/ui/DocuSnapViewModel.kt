@@ -8,11 +8,16 @@ import com.docusnap.ai.DocuSnapApplication
 import com.docusnap.ai.ai.AiBackendClient
 import com.docusnap.ai.ai.GeminiReasoningEngine
 import com.docusnap.ai.billing.BillingManager
+import com.docusnap.ai.billing.OneTimeSku
 import com.docusnap.ai.billing.SubscriptionTier
 import com.docusnap.ai.data.model.DocumentEntity
 import com.docusnap.ai.i18n.AppLanguage
 import com.docusnap.ai.i18n.AppStrings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class ConversationalSearchState(
@@ -22,12 +27,30 @@ data class ConversationalSearchState(
     val matchedDocuments: List<DocumentEntity> = emptyList()
 )
 
+data class GalleryScanProgress(
+    val isScanning: Boolean = false,
+    val isCoolingDown: Boolean = false,
+    val cooldownRemainingSec: Int = 0,
+    val totalGalleryCount: Int = 0,
+    val indexedCount: Int = 0,
+    val percent: Int = 0,
+    val currentBatchProcessed: Int = 0,
+    val isLimitedAccess: Boolean = false,
+    val statusMessage: String = "Idle"
+)
+
 class DocuSnapViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as DocuSnapApplication
     private val docDao = app.database.documentDao()
     private val geminiEngine = GeminiReasoningEngine()
     val syncRepo = app.syncRepository
+
+    // Continuous Gallery Scanner Progress
+    private val _scanProgress = MutableStateFlow(GalleryScanProgress())
+    val scanProgress: StateFlow<GalleryScanProgress> = _scanProgress.asStateFlow()
+    private var scanJob: Job? = null
+    private val skipCooldownTrigger = MutableStateFlow(0)
 
     // Billing Manager & Tier
     val billingManager = BillingManager.getInstance(application)
@@ -228,12 +251,117 @@ class DocuSnapViewModel(application: Application) : AndroidViewModel(application
         )
     }
 
+    fun checkPermissionsAndRefreshCounts() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<DocuSnapApplication>()
+            val isLimited = com.docusnap.ai.service.MediaIngestionWorker.isPartialPhotoAccess(context)
+            val totalInGallery = com.docusnap.ai.service.MediaIngestionWorker.queryTotalGalleryCount(context)
+            val indexed = docDao.getTotalCount()
+            val p = if (totalInGallery > 0) (indexed * 100 / totalInGallery).coerceIn(0, 100) else 0
+
+            _scanProgress.value = _scanProgress.value.copy(
+                totalGalleryCount = totalInGallery,
+                indexedCount = indexed,
+                percent = p,
+                isLimitedAccess = isLimited
+            )
+        }
+    }
+
+    /**
+     * Continuous automated gallery scanner:
+     * Indexes batches of 50 images with on-device OCR -> Pushes OCR text to Web -> Pauses 2 mins -> repeats.
+     */
+    fun startContinuousGalleryScan() {
+        if (scanJob?.isActive == true) return
+        scanJob = viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<DocuSnapApplication>()
+            val isLimited = com.docusnap.ai.service.MediaIngestionWorker.isPartialPhotoAccess(context)
+            val totalInGallery = com.docusnap.ai.service.MediaIngestionWorker.queryTotalGalleryCount(context)
+            var indexed = docDao.getTotalCount()
+            val maxTierDocs = maxOf(activeTier.value.maxDocuments, OneTimeSku.maxDocsForAmount(lifetimeAmountUsd.value))
+
+            _scanProgress.value = GalleryScanProgress(
+                isScanning = true,
+                totalGalleryCount = totalInGallery,
+                indexedCount = indexed,
+                percent = if (totalInGallery > 0) (indexed * 100 / totalInGallery).coerceIn(0, 100) else 0,
+                isLimitedAccess = isLimited,
+                statusMessage = "Starting automated gallery indexing..."
+            )
+
+            var offset = 0
+            while (coroutineContext.isActive && indexed < totalInGallery && indexed < maxTierDocs) {
+                _scanProgress.value = _scanProgress.value.copy(
+                    isScanning = true,
+                    isCoolingDown = false,
+                    statusMessage = "Indexing batch of 50 images with on-device OCR..."
+                )
+
+                val newDocs = com.docusnap.ai.service.MediaIngestionWorker.processBatch(context, batchSize = 50, offset = offset)
+                indexed = docDao.getTotalCount()
+                offset += 50
+
+                if (newDocs.isNotEmpty()) {
+                    _scanProgress.value = _scanProgress.value.copy(
+                        statusMessage = "Pushing ${newDocs.size} OCR texts to website vault..."
+                    )
+                    syncRepo.syncBatchDocuments(newDocs)
+                }
+
+                val currentPercent = if (totalInGallery > 0) (indexed * 100 / totalInGallery).coerceIn(0, 100) else 100
+                _scanProgress.value = _scanProgress.value.copy(
+                    indexedCount = indexed,
+                    percent = currentPercent,
+                    currentBatchProcessed = newDocs.size
+                )
+
+                if (newDocs.isEmpty() && offset >= totalInGallery) {
+                    break
+                }
+
+                // 2-minute battery-saving cooldown with skip capability
+                if (indexed < totalInGallery && indexed < maxTierDocs) {
+                    val initialTrigger = skipCooldownTrigger.value
+                    for (sec in 120 downTo 1) {
+                        if (!coroutineContext.isActive || skipCooldownTrigger.value != initialTrigger) break
+                        _scanProgress.value = _scanProgress.value.copy(
+                            isCoolingDown = true,
+                            cooldownRemainingSec = sec,
+                            statusMessage = "Batch of 50 synced! Pausing 2 mins to preserve battery (${sec}s remaining)..."
+                        )
+                        delay(1000)
+                    }
+                }
+            }
+
+            _scanProgress.value = _scanProgress.value.copy(
+                isScanning = false,
+                isCoolingDown = false,
+                statusMessage = "Gallery scan complete! $indexed documents indexed & synced."
+            )
+        }
+    }
+
+    fun skipCooldownAndContinue() {
+        skipCooldownTrigger.value += 1
+    }
+
+    fun stopContinuousGalleryScan() {
+        scanJob?.cancel()
+        _scanProgress.value = _scanProgress.value.copy(
+            isScanning = false,
+            isCoolingDown = false,
+            statusMessage = "Gallery scan paused."
+        )
+    }
+
     fun scanGallery() {
-        com.docusnap.ai.service.MediaIngestionWorker.enqueueScan(getApplication(), scanRecentLimit = 5000)
+        startContinuousGalleryScan()
     }
 
     fun scanFullGallery() {
-        com.docusnap.ai.service.MediaIngestionWorker.enqueueScan(getApplication(), scanRecentLimit = 5000)
+        startContinuousGalleryScan()
     }
 
     fun deleteDocument(id: String) {

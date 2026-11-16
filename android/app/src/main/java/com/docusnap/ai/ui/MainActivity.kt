@@ -84,11 +84,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel.checkPermissionsAndRefreshCounts()
         if (hasAnyMediaPermission()) {
             MediaObserverService.start(this)
             MediaObserverService.scheduleContentUriTrigger(this)
             MediaObserverService.schedulePeriodicScan(this)
-            MediaIngestionWorker.enqueueScan(this, scanRecentLimit = 5000)
         }
     }
 
