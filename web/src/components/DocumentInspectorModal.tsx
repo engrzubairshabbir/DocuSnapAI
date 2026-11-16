@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   X, ZoomIn, ZoomOut, Copy, Check, FileText, Pill, DollarSign, 
-  UserCheck, ChevronDown, ChevronUp, Plus, Tag, Sparkles, Trash2, ExternalLink 
+  UserCheck, ChevronDown, ChevronUp, Plus, Tag, Sparkles, Trash2, ExternalLink,
+  Share2, Download
 } from 'lucide-react';
 import { DocumentEntity, KeyEntities } from '../types.ts';
 import { AdSenseBanner } from './AdSenseBanner.tsx';
@@ -24,8 +25,39 @@ export const DocumentInspectorModal: React.FC<Props> = ({
   const [showRawOcr, setShowRawOcr] = useState(false);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
 
   if (!document) return null;
+
+  const handleShareDocument = async () => {
+    const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.docusnap.ai';
+    const webVaultUrl = 'https://docusnap.consultways.com';
+    const shareText = `📄 DocuSnap AI Smart Vault Document\n\n` +
+      `📌 Title: ${document.title}\n` +
+      `📁 Type: ${document.document_type}\n` +
+      `📅 Date: ${document.date_detected}\n` +
+      `💡 Summary: ${document.ai_summary || 'Indexed via DocuSnap AI'}\n\n` +
+      `🔗 View Document: ${document.cloud_storage_url || webVaultUrl}\n\n` +
+      `⚡ Scanned and organized seamlessly with DocuSnap AI: Bill & Rx Finder.\n` +
+      `📲 Download on Google Play Store: ${playStoreUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `DocuSnap AI: ${document.title}`,
+          text: shareText,
+          url: document.cloud_storage_url || webVaultUrl
+        });
+        return;
+      } catch (err) {
+        // Fallback to clipboard
+      }
+    }
+    
+    navigator.clipboard.writeText(shareText);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2500);
+  };
 
   let entities: KeyEntities = {
     doctor_name: null,
@@ -369,18 +401,43 @@ export const DocumentInspectorModal: React.FC<Props> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-cyan-500/20 bg-[#0C1220] flex items-center justify-between">
+        <div className="p-4 border-t border-cyan-500/20 bg-[#0C1220] flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-gray-400">
             Detected: {document.date_detected}
           </span>
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Share Document with Play Store link */}
+            <button
+              onClick={handleShareDocument}
+              className="px-3.5 py-2 bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/50 hover:to-teal-600/50 text-emerald-300 border border-emerald-500/50 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+              title="Share document details and link"
+            >
+              <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{shareCopied ? 'Link & Promo Copied!' : 'Share Document'}</span>
+            </button>
+
+            {/* Direct Save to Device */}
+            {document.cloud_storage_url && (
+              <a
+                href={document.cloud_storage_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={document.title || 'document'}
+                className="px-3.5 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/50 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5"
+                title="Download full resolution file to your device"
+              >
+                <Download className="w-3.5 h-3.5 text-blue-400" />
+                <span>Save to Device</span>
+              </a>
+            )}
+
             {onDelete && (
               <button
                 onClick={() => {
                   onDelete(document.id);
                   onClose();
                 }}
-                className="px-4 py-2 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/60 text-xs font-bold rounded-xl transition-colors"
+                className="px-3.5 py-2 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/60 text-xs font-bold rounded-xl transition-colors"
               >
                 Delete
               </button>
