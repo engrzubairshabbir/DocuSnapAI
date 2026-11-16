@@ -49,6 +49,7 @@ fun DocuSnapNavHost(viewModel: DocuSnapViewModel) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val currentLang by viewModel.currentLanguage.collectAsState()
+    val currentUser by viewModel.syncRepo.currentUserFlow.collectAsState()
 
     val bottomNavItems = listOf(
         Screen.Search to Icons.Default.AutoAwesome,
@@ -87,11 +88,35 @@ fun DocuSnapNavHost(viewModel: DocuSnapViewModel) {
                                 }
                             },
                             icon = {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = AppStrings.get(screen.titleKey, currentLang),
-                                    tint = if (isSelected) AccentBlue else TextMuted
-                                )
+                                if (screen == Screen.Settings) {
+                                    BadgedBox(
+                                        badge = {
+                                            if (currentUser != null && !currentUser!!.isAnonymous) {
+                                                Badge(
+                                                    containerColor = Color(0xFF10B981),
+                                                    modifier = Modifier.size(7.dp)
+                                                )
+                                            } else {
+                                                Badge(
+                                                    containerColor = Color(0xFF3B82F6),
+                                                    modifier = Modifier.size(6.dp)
+                                                )
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = AppStrings.get(screen.titleKey, currentLang),
+                                            tint = if (isSelected) AccentBlue else TextMuted
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = AppStrings.get(screen.titleKey, currentLang),
+                                        tint = if (isSelected) AccentBlue else TextMuted
+                                    )
+                                }
                             },
                             label = {
                                 Text(

@@ -176,6 +176,186 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        // TOP HERO: GOOGLE ACCOUNT & WEB LINK
+        Text(
+            text = "GOOGLE ACCOUNT & DESKTOP SYNC",
+            color = AccentCyan,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+            shape = RoundedCornerShape(18.dp),
+            border = androidx.compose.foundation.BorderStroke(
+                1.5.dp, 
+                if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald.copy(alpha = 0.8f) else AccentCyan.copy(alpha = 0.5f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald.copy(alpha = 0.2f) else AccentBlue.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (currentUser != null && !currentUser!!.isAnonymous) Icons.Default.CheckCircle else Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            tint = if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald else AccentBlue,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (currentUser != null && !currentUser!!.isAnonymous) "Google Account Connected" else "Link Google Account",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald else AccentAmber)
+                            )
+                        }
+                        Text(
+                            text = if (currentUser != null && !currentUser!!.isAnonymous) {
+                                currentUser!!.email ?: "Active Google Session"
+                            } else {
+                                "Connect to sync with docusnap.consultways.com"
+                            },
+                            color = if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald else TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Explanatory Sync Banner
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CardDark)
+                        .padding(12.dp)
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.SyncAlt,
+                                contentDescription = null,
+                                tint = AccentCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "WhatsApp Web-Style Desktop Search",
+                                color = AccentCyan,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Search all phone OCR text, bills & prescriptions from your laptop at docusnap.consultways.com. Your login persists permanently.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (currentUser == null || currentUser!!.isAnonymous) {
+                    Button(
+                        onClick = {
+                            val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                .requestEmail()
+                            try {
+                                val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+                                if (resId != 0) {
+                                    gsoBuilder.requestIdToken(context.getString(resId))
+                                }
+                            } catch (_: Exception) {}
+                            val client = GoogleSignIn.getClient(context, gsoBuilder.build())
+                            googleSignInLauncher.launch(client.signInIntent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sign in with Google", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                } else {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.signOut()
+                                Toast.makeText(context, "Signed out of Google account", Toast.LENGTH_SHORT).show()
+                            },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Sign Out", color = TextSecondary, fontSize = 12.sp)
+                        }
+                        Button(
+                            onClick = {
+                                viewModel.syncAllDocumentsToWeb {
+                                    Toast.makeText(context, "All gallery documents pushed to Web Vault!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentEmerald),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1.5f)
+                        ) {
+                            Icon(imageVector = Icons.Default.CloudUpload, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Push All Docs", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://docusnap.consultways.com"))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Cannot open browser: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open Web Portal (docusnap.consultways.com)", color = AccentCyan, fontSize = 12.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         // SUBSCRIPTION TIER & LIMITS
         Text(
             text = AppStrings.get(AppStrings.SETTINGS_SUBSCRIPTION, currentLang).uppercase(),
@@ -404,176 +584,6 @@ fun SettingsScreen(
                     ) {
                         Text("Disable Battery Optimization for Zero-Click Ingestion")
                     }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // CLOUD SYNC & AUTHENTICATION (WHATSAPP-WEB STYLE MULTI-DEVICE)
-        Text(
-            text = "CLOUD SYNC & MULTI-DEVICE LINK",
-            color = AccentPurple,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-            shape = RoundedCornerShape(16.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald.copy(alpha = 0.2f) else AccentPurple.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (currentUser != null && !currentUser!!.isAnonymous) Icons.Default.CheckCircle else Icons.Default.CloudSync,
-                            contentDescription = null,
-                            tint = if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald else AccentPurple,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (currentUser != null && !currentUser!!.isAnonymous) "Google Account Linked" else "Anonymous Local Vault",
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = if (currentUser != null && !currentUser!!.isAnonymous) {
-                                currentUser!!.email ?: "Active User"
-                            } else {
-                                "Vault ID: ${currentUser?.uid?.take(8) ?: "Offline"} (Not synced to desktop)"
-                            },
-                            color = if (currentUser != null && !currentUser!!.isAnonymous) AccentEmerald else TextSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // WhatsApp Web style synchronization explanation
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(CardDark)
-                        .padding(12.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.SyncAlt,
-                                contentDescription = null,
-                                tint = AccentCyan,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "WhatsApp Web-Style Desktop Sync",
-                                color = AccentCyan,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Login with the same Google ID on your browser at docusnap.consultways.com. All bills & prescriptions scanned on your mobile phone appear in real-time on your laptop!",
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // GOOGLE SIGN IN BUTTON or LOGOUT
-                if (currentUser == null || currentUser!!.isAnonymous) {
-                    Button(
-                        onClick = {
-                            val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                .requestEmail()
-                            try {
-                                val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-                                if (resId != 0) {
-                                    gsoBuilder.requestIdToken(context.getString(resId))
-                                }
-                            } catch (_: Exception) {}
-                            val client = GoogleSignIn.getClient(context, gsoBuilder.build())
-                            googleSignInLauncher.launch(client.signInIntent)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Sign in with Google to Link Devices", fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                } else {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.signOut()
-                                Toast.makeText(context, "Signed out of Google account", Toast.LENGTH_SHORT).show()
-                            },
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Sign Out", color = TextSecondary, fontSize = 12.sp)
-                        }
-                        Button(
-                            onClick = {
-                                viewModel.syncAllDocumentsToWeb {
-                                    Toast.makeText(context, "All documents pushed to Web Vault!", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentEmerald),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1.5f)
-                        ) {
-                            Icon(imageVector = Icons.Default.CloudUpload, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Push All Docs", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // OPEN WEB PORTAL (docusnap.consultways.com) BUTTON
-                OutlinedButton(
-                    onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://docusnap.consultways.com"))
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Cannot open browser: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Open Web Portal (docusnap.consultways.com)", color = AccentCyan, fontSize = 12.sp)
                 }
             }
         }
