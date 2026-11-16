@@ -314,25 +314,32 @@ class MediaIngestionWorker(
                 }
             }
 
-            // Compute SHA-256 to strictly prevent duplicates
-            val fileHash = computeSha256(context, uri) ?: return false
-            val existing = docDao.getDocumentByHash(fileHash)
-            if (existing != null) {
-                val existingFile = if (existing.localImageUri.startsWith("file://")) {
-                    File(Uri.parse(existing.localImageUri).path ?: "")
-                } else null
-                if (existingFile == null || !existingFile.exists()) {
-                    val restoredUri = saveImagePermanently(context, uri, existing.id, pdfPageBitmap)
-                    docDao.updateDocument(existing.copy(localImageUri = restoredUri))
-                }
+            // 1. Subscription check: Verify File Size Limit according to user's active tier
+            val fileSizeBytes = getFileSizeBytes(context, uri)
+            val fileSizeMb = fileSizeBytes / (1024f * 1024f)
+            val maxAllowedMb = BillingManager.getMaxAllowedFileSizeMb(context)
+
+            if (fileSizeBytes > 0 && fileSizeMb > maxAllowedMb) {
+                Log.w("DocuSnapBilling", "File $uri size (${"%.2f".format(fileSizeMb)} MB) exceeds tier limit (${maxAllowedMb} MB). Skipping heavy ingestion.")
                 return false
             }
 
-            // Subscription check
+            // 2. Subscription check: Total document quota
             val totalDocs = docDao.getTotalCount()
             val maxDocs = BillingManager.getMaxAllowedDocuments(context)
             if (totalDocs >= maxDocs) {
                 Log.w("DocuSnapBilling", "Limit reached ($totalDocs / $maxDocs). Upgrade to add more.")
+                return false
+            }
+
+            // 3. Compute SHA-256 to strictly prevent duplicates
+            val fileHash = computeSha256(context, uri) ?: return false
+            val existing = docDao.getDocumentByHash(fileHash)
+            if (existing != null) {
+                val thumbFile = File(context.filesDir, "vault_thumbs/${existing.id}.webp")
+                if (!thumbFile.exists()) {
+                    generateThumbnailAndReference(context, uri, existing.id, pdfPageBitmap)
+                }
                 return false
             }
 
@@ -400,7 +407,8 @@ class MediaIngestionWorker(
             }
 
             val docId = UUID.randomUUID().toString()
-            val permanentLocalUri = saveImagePermanently(context, uri, docId, pdfPageBitmap)
+            // Storage-free indexing: retain original gallery/file URI directly (zero duplication of storage)
+            val permanentLocalUri = generateThumbnailAndReference(context, uri, docId, pdfPageBitmap)
 
             val mergedTags = LinkedHashSet<String>().apply {
                 addAll(semanticResult.searchableTags)
@@ -468,65 +476,75 @@ class MediaIngestionWorker(
             return Bitmap.createScaledBitmap(realImage, width, height, true)
         }
 
-        private fun saveImagePermanently(
+        private fun getFileSizeBytes(context: Context, uri: Uri): Long {
+            return try {
+                if (uri.scheme == "content") {
+                    context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.SIZE), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val sizeIdx = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                            if (sizeIdx != -1) return cursor.getLong(sizeIdx)
+                        }
+                    }
+                }
+                val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+                val size = pfd?.statSize ?: 0L
+                pfd?.close()
+                if (size > 0L) return size
+
+                if (uri.scheme == "file" && uri.path != null) {
+                    val f = File(uri.path!!)
+                    if (f.exists()) return f.length()
+                }
+                0L
+            } catch (_: Exception) {
+                0L
+            }
+        }
+
+        private fun generateThumbnailAndReference(
             context: Context,
             sourceUri: Uri,
             docId: String,
             pdfPageBitmap: Bitmap? = null
         ): String {
-            return try {
-                val imagesDir = File(context.filesDir, "vault_images").apply { mkdirs() }
+            try {
                 val thumbsDir = File(context.filesDir, "vault_thumbs").apply { mkdirs() }
-
-                val originalExt = resolveOriginalExtension(context, sourceUri)
-                val imageFile = File(imagesDir, "$docId.$originalExt")
                 val thumbFile = File(thumbsDir, "$docId.webp")
 
-                var copiedBytes = 0L
-                context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                    FileOutputStream(imageFile).use { output ->
-                        copiedBytes = input.copyTo(output)
+                if (pdfPageBitmap != null) {
+                    val scaled = scaleDownBitmap(pdfPageBitmap, 400f)
+                    FileOutputStream(thumbFile).use { out ->
+                        scaled.compress(Bitmap.CompressFormat.WEBP, 75, out)
                     }
-                }
-
-                if (copiedBytes <= 0L || !imageFile.exists()) {
-                    return sourceUri.toString()
-                }
-
-                try {
-                    if (pdfPageBitmap != null) {
-                        val scaled = scaleDownBitmap(pdfPageBitmap, 400f)
+                    if (scaled != pdfPageBitmap) scaled.recycle()
+                } else {
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    context.contentResolver.openInputStream(sourceUri)?.use { stream ->
+                        BitmapFactory.decodeStream(stream, null, boundsOpts)
+                    }
+                    var sampleSize = 1
+                    while (boundsOpts.outWidth / sampleSize > 800 || boundsOpts.outHeight / sampleSize > 800) {
+                        sampleSize *= 2
+                    }
+                    val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                    val sampledBitmap = context.contentResolver.openInputStream(sourceUri)?.use { stream ->
+                        BitmapFactory.decodeStream(stream, null, decodeOpts)
+                    }
+                    if (sampledBitmap != null) {
+                        val scaledThumb = scaleDownBitmap(sampledBitmap, 400f)
                         FileOutputStream(thumbFile).use { out ->
-                            scaled.compress(Bitmap.CompressFormat.WEBP, 75, out)
+                            scaledThumb.compress(Bitmap.CompressFormat.WEBP, 75, out)
                         }
-                        if (scaled != pdfPageBitmap) scaled.recycle()
-                    } else {
-                        val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        BitmapFactory.decodeFile(imageFile.absolutePath, boundsOpts)
-                        var sampleSize = 1
-                        while (boundsOpts.outWidth / sampleSize > 800 || boundsOpts.outHeight / sampleSize > 800) {
-                            sampleSize *= 2
-                        }
-                        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-                        val sampledBitmap = BitmapFactory.decodeFile(imageFile.absolutePath, decodeOpts)
-                        if (sampledBitmap != null) {
-                            val scaledThumb = scaleDownBitmap(sampledBitmap, 400f)
-                            FileOutputStream(thumbFile).use { out ->
-                                scaledThumb.compress(Bitmap.CompressFormat.WEBP, 75, out)
-                            }
-                            if (scaledThumb != sampledBitmap) scaledThumb.recycle()
-                            sampledBitmap.recycle()
-                        }
+                        if (scaledThumb != sampledBitmap) scaledThumb.recycle()
+                        sampledBitmap.recycle()
                     }
-                } catch (thumbErr: Exception) {
-                    Log.w("DocuSnapIngestion", "Thumbnail skipped for $docId: ${thumbErr.message}")
                 }
-
-                Uri.fromFile(imageFile).toString()
-            } catch (e: Exception) {
-                Log.e("DocuSnapIngestion", "Failed to save permanently for doc $docId", e)
-                sourceUri.toString()
+            } catch (thumbErr: Exception) {
+                Log.w("DocuSnapIngestion", "Thumbnail skipped for $docId: ${thumbErr.message}")
             }
+
+            // Return original source URI directly: zero storage duplication!
+            return sourceUri.toString()
         }
 
         private fun fetchLatestGalleryUris(context: Context, limit: Int): List<Uri> {

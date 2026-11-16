@@ -322,9 +322,46 @@ fun SubscriptionScreen(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp
                                     )
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(vertical = 3.dp)
+                                    ) {
+                                        Surface(
+                                            color = AccentCyan.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(6.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f))
+                                        ) {
+                                            Text(
+                                                text = "Max ${tier.maxFileSizeMb.toInt()} MB / File",
+                                                color = AccentCyan,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+
+                                        if (tier.adFree) {
+                                            Surface(
+                                                color = AccentEmerald.copy(alpha = 0.18f),
+                                                shape = RoundedCornerShape(6.dp),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.6f))
+                                            ) {
+                                                Text(
+                                                    text = "100% No Ads",
+                                                    color = AccentEmerald,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
                                     Text(
                                         text = "Up to ${tier.maxDocuments.toString().replace(Regex("(\\d)(?=(\\d{3})+$)"), "$1,")} documents",
-                                        color = AccentCyan,
+                                        color = TextSecondary,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium
                                     )

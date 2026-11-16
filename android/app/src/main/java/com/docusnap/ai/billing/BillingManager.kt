@@ -17,7 +17,9 @@ enum class SubscriptionTier(
     val title: String,
     val priceUsd: String,
     val maxDocuments: Int,
+    val maxFileSizeMb: Float,
     val isPopular: Boolean = false,
+    val adFree: Boolean = false,
     val features: List<String>
 ) {
     FREE(
@@ -25,11 +27,14 @@ enum class SubscriptionTier(
         title = "Free Starter",
         priceUsd = "$0.00",
         maxDocuments = 500,
+        maxFileSizeMb = 1.0f,
+        adFree = false,
         features = listOf(
-            "Up to 500 offline documents",
+            "Scan & index files up to 1.0 MB",
+            "Up to 500 gallery documents indexed",
+            "Zero storage duplication (lightweight)",
             "100% on-device Google ML Kit OCR",
-            "SQLite FTS5 instant search",
-            "Standard categorization"
+            "SQLite FTS5 instant smart search"
         )
     ),
     SILVER(
@@ -37,12 +42,15 @@ enum class SubscriptionTier(
         title = "Silver Vault (Pro Organizer)",
         priceUsd = "$2.99 / mo",
         maxDocuments = 2000,
+        maxFileSizeMb = 3.0f,
+        adFree = true,
         features = listOf(
-            "Up to 2,000 documents",
-            "Unlimited Gemini Deep Reasoning",
-            "Automatic Firebase Cloud Backup",
-            "Auto-extract medicine dosages & totals",
-            "Bilingual Roman Urdu / English queries"
+            "Scan & index files up to 3.0 MB",
+            "100% Ad-Free Experience",
+            "Up to 2,000 indexed documents",
+            "Secure Private Cloud Backup (Zero Data Loss)",
+            "Remote Web Search from Laptop / Browser",
+            "Auto-extract medicine dosages & totals"
         )
     ),
     GOLD(
@@ -50,13 +58,16 @@ enum class SubscriptionTier(
         title = "Gold Vault (Clinic & Business)",
         priceUsd = "$9.99 / mo",
         maxDocuments = 5000,
+        maxFileSizeMb = 8.0f,
         isPopular = true,
+        adFree = true,
         features = listOf(
-            "Up to 5,000 documents",
-            "Fastest priority Gemini Flash reasoning",
-            "Real-time sync to iPhone Safari & Desktop PWA",
-            "Deep-zoom inspector & full OCR exporter",
-            "Priority customer & billing support"
+            "Scan & index files up to 8.0 MB (High-Res & PDFs)",
+            "100% Ad-Free Experience",
+            "Up to 5,000 indexed documents",
+            "Priority Private Cloud Backup & Sync",
+            "Remote Web Search & Hi-Res Original Sharing",
+            "Fastest priority Gemini Flash reasoning"
         )
     ),
     PLATINUM(
@@ -64,25 +75,31 @@ enum class SubscriptionTier(
         title = "Platinum Master (Enterprise VIP)",
         priceUsd = "$29.99 / mo",
         maxDocuments = 10000,
+        maxFileSizeMb = 15.0f,
+        adFree = true,
         features = listOf(
-            "Up to 10,000 documents",
+            "Scan & index files up to 15.0 MB (Heavy Multi-page Docs)",
+            "100% Ad-Free Experience",
+            "Up to 10,000 indexed documents",
             "High-capacity bulk gallery ingestion",
-            "Multi-device cloud collaboration",
-            "Dedicated Firestore storage vault",
-            "Early access to new AI models"
+            "Cross-platform real-time sync & search",
+            "Dedicated secure cloud storage vault"
         )
     ),
     ENTERPRISE(
         id = "docusnap_sub_enterprise_4999",
         title = "Infinity Diamond (Corporate Suite)",
         priceUsd = "$49.99 / mo",
-        maxDocuments = 15000,
+        maxDocuments = 25000,
+        maxFileSizeMb = 50.0f,
+        adFree = true,
         features = listOf(
-            "Up to 15,000 documents",
-            "Maximum capacity for hospitals & offices",
-            "Zero throttling on Gemini queries",
-            "Full data export in JSON / CSV",
-            "VIP 24/7 dedicated account manager"
+            "Scan & index files up to 50.0 MB (Full Medical Records)",
+            "100% Ad-Free Experience",
+            "Up to 25,000 indexed documents",
+            "Maximum capacity for clinics & law offices",
+            "Instant global web search anywhere, anytime",
+            "Full data export in JSON / CSV"
         )
     );
 
@@ -483,6 +500,25 @@ class BillingManager(private val context: Context) : PurchasesUpdatedListener {
 
         fun getMaxAllowedDocuments(context: Context): Int {
             return getInstance(context).effectiveMaxDocuments()
+        }
+
+        fun getMaxAllowedFileSizeMb(context: Context): Float {
+            val bm = getInstance(context)
+            val subMaxMb = bm.activeTier.value.maxFileSizeMb
+            val lifetimeUsd = bm.lifetimeAmountUsd.value
+            val oneTimeMaxMb = when {
+                lifetimeUsd >= 499 -> 50.0f
+                lifetimeUsd >= 299 -> 25.0f
+                lifetimeUsd >= 199 -> 15.0f
+                lifetimeUsd >= 99 -> 8.0f
+                else -> 1.0f
+            }
+            return maxOf(subMaxMb, oneTimeMaxMb)
+        }
+
+        fun isAdFree(context: Context): Boolean {
+            val bm = getInstance(context)
+            return bm.activeTier.value.adFree || bm.lifetimeAmountUsd.value >= 99
         }
     }
 }

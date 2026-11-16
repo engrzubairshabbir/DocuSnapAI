@@ -58,6 +58,20 @@ export const ConversationalSearch: React.FC<Props> = ({ documents, onSelectDocum
 
   return (
     <div className="space-y-6">
+      {/* Remote Phone Vault Connected Banner */}
+      <div className="bg-gradient-to-r from-blue-900/30 via-cyan-950/20 to-purple-900/30 border border-cyan-500/30 rounded-2xl p-3.5 flex items-center justify-between shadow-[0_0_20px_rgba(0,245,255,0.1)]">
+        <div className="flex items-center space-x-3">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+          <div>
+            <span className="text-xs font-bold text-white flex items-center space-x-1.5">
+              <span>Remote Phone Smart Vault Connected</span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-md font-mono">LIVE SYNC</span>
+            </span>
+            <p className="text-[11px] text-gray-400">Search all OCR text, prescriptions & bills indexed on your phone from any browser.</p>
+          </div>
+        </div>
+      </div>
+
       {/* Search Input Box */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-blue-400">
