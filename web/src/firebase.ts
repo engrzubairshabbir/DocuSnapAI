@@ -138,9 +138,21 @@ export async function loginWithGoogle(): Promise<User | null> {
   try {
     const res = await signInWithPopup(auth, provider);
     return res.user;
-  } catch (e) {
+  } catch (e: any) {
     console.error('Google sign in error:', e);
+    if (e?.code === 'auth/unauthorized-domain') {
+      alert("Firebase Auth Domain Notice: Please add 'docusnap.consultways.com' to Firebase Console -> Authentication -> Settings -> Authorized Domains.");
+    }
     return null;
+  }
+}
+
+export async function logoutUser(): Promise<void> {
+  try {
+    await auth.signOut();
+    await signInAnonymously(auth);
+  } catch (e) {
+    console.error('Sign out error:', e);
   }
 }
 

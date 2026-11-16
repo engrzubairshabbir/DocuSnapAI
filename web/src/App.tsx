@@ -12,7 +12,9 @@ import {
   ensureAuthUser, 
   subscribeToDocuments, 
   auth, 
-  DEMO_DOCUMENTS 
+  DEMO_DOCUMENTS,
+  loginWithGoogle,
+  logoutUser
 } from './firebase.ts';
 import { Sparkles, Folder, Cloud } from 'lucide-react';
 
@@ -24,6 +26,7 @@ export const App: React.FC = () => {
   const [userId, setUserId] = useState<string>('guest-user-123');
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // 1. Authenticate anonymously or resume session
@@ -32,6 +35,7 @@ export const App: React.FC = () => {
         setUserId(user.uid);
         setIsAnonymous(user.isAnonymous);
         setUserEmail(user.email);
+        setUserPhotoUrl(user.photoURL);
 
         // 2. Subscribe to real-time updates from Firestore
         const unsubscribe = subscribeToDocuments(user.uid, (updatedDocs) => {
@@ -48,6 +52,9 @@ export const App: React.FC = () => {
         setUserId(user.uid);
         setIsAnonymous(user.isAnonymous);
         setUserEmail(user.email);
+        setUserPhotoUrl(user.photoURL);
+      } else {
+        setUserPhotoUrl(null);
       }
     });
 
@@ -67,6 +74,21 @@ export const App: React.FC = () => {
         setActiveTab={setActiveTab}
         onOpenUpload={() => setIsUploadOpen(true)}
         userId={userId}
+        isAnonymous={isAnonymous}
+        userEmail={userEmail}
+        userPhotoUrl={userPhotoUrl}
+        onLoginGoogle={async () => {
+          const user = await loginWithGoogle();
+          if (user) {
+            setUserId(user.uid);
+            setIsAnonymous(user.isAnonymous);
+            setUserEmail(user.email);
+            setUserPhotoUrl(user.photoURL);
+          }
+        }}
+        onLogout={async () => {
+          await logoutUser();
+        }}
       />
 
       {/* Main Content Area */}
