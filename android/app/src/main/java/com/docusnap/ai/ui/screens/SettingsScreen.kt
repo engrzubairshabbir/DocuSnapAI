@@ -285,12 +285,13 @@ fun SettingsScreen(
                         onClick = {
                             val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                                 .requestEmail()
-                            try {
+                            val webClientId = try {
                                 val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-                                if (resId != 0) {
-                                    gsoBuilder.requestIdToken(context.getString(resId))
-                                }
-                            } catch (_: Exception) {}
+                                if (resId != 0) context.getString(resId) else "638866510492-ufh87nu6ams6jfhjgkarm4il2hj6943q.apps.googleusercontent.com"
+                            } catch (_: Exception) {
+                                "638866510492-ufh87nu6ams6jfhjgkarm4il2hj6943q.apps.googleusercontent.com"
+                            }
+                            gsoBuilder.requestIdToken(webClientId)
                             val client = GoogleSignIn.getClient(context, gsoBuilder.build())
                             googleSignInLauncher.launch(client.signInIntent)
                         },
