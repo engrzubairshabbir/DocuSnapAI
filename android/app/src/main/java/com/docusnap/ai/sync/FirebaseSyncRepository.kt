@@ -3,7 +3,9 @@ package com.docusnap.ai.sync
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
 import com.docusnap.ai.data.local.DocumentDao
 import com.docusnap.ai.data.model.DocumentEntity
 import com.google.firebase.auth.FirebaseAuth
@@ -292,57 +294,55 @@ class FirebaseSyncRepository(
             }
     }
 
-    private fun loadAndCompressImage(doc: DocumentEntity, maxDimension: Int = 1400, quality: Int = 80): ByteArray? {
-        // 1. Try original local image URI
+    private fun loadFullOrThumbnailDataUrl(doc: DocumentEntity): String? {
+        // 1. Try loading high-resolution image from original MediaStore URI using modern ImageDecoder
         if (doc.localImageUri.isNotBlank()) {
-            val bytes = compressFromUri(Uri.parse(doc.localImageUri), maxDimension, quality)
-            if (bytes != null && bytes.isNotEmpty()) return bytes
-        }
-        // 2. Fallback to cached vault thumbnail
-        val thumbFile = java.io.File(context.filesDir, "vault_thumbs/${doc.id}.webp")
-        if (thumbFile.exists()) {
-            val bytes = compressFromUri(Uri.fromFile(thumbFile), maxDimension, quality)
-            if (bytes != null && bytes.isNotEmpty()) return bytes
-        }
-        return null
-    }
-
-    private fun compressFromUri(uri: Uri, maxDimension: Int, quality: Int): ByteArray? {
-        return try {
-            fun openStream(): java.io.InputStream? {
-                return if (uri.scheme == "content") {
-                    context.contentResolver.openInputStream(uri)
+            try {
+                val uri = Uri.parse(doc.localImageUri)
+                android.util.Log.d("DocuSnapSync", "Attempting ImageDecoder on URI: $uri")
+                val bitmap: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val source = ImageDecoder.createSource(context.contentResolver, uri)
+                    ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        val maxDim = 1400
+                        val w = info.size.width
+                        val h = info.size.height
+                        if (w > maxDim || h > maxDim) {
+                            val ratio = minOf(maxDim.toFloat() / w, maxDim.toFloat() / h)
+                            decoder.setTargetSize((w * ratio).toInt(), (h * ratio).toInt())
+                        }
+                    }
                 } else {
-                    val path = uri.path ?: uri.toString()
-                    java.io.FileInputStream(java.io.File(path))
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        BitmapFactory.decodeStream(stream)
+                    } ?: throw IllegalStateException("Could not open stream for $uri")
                 }
+
+                val outStream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outStream)
+                bitmap.recycle()
+                val base64 = android.util.Base64.encodeToString(outStream.toByteArray(), android.util.Base64.NO_WRAP)
+                android.util.Log.d("DocuSnapSync", "Successfully loaded high-res JPEG from original URI!")
+                return "data:image/jpeg;base64,$base64"
+            } catch (e: Exception) {
+                android.util.Log.w("DocuSnapSync", "Could not load from localImageUri: ${e.message}. Trying thumbnail fallback.")
             }
-
-            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            openStream()?.use { BitmapFactory.decodeStream(it, null, boundsOpts) } ?: return null
-
-            var sampleSize = 1
-            var w = boundsOpts.outWidth
-            var h = boundsOpts.outHeight
-            if (w <= 0 || h <= 0) return null
-
-            while (w / 2 >= maxDimension || h / 2 >= maxDimension) {
-                w /= 2
-                h /= 2
-                sampleSize *= 2
-            }
-
-            val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-            val bitmap = openStream()?.use { BitmapFactory.decodeStream(it, null, decodeOpts) } ?: return null
-
-            val outStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outStream)
-            bitmap.recycle()
-            outStream.toByteArray()
-        } catch (e: Exception) {
-            android.util.Log.e("DocuSnapSync", "compressFromUri error for $uri: ${e.message}")
-            null
         }
+
+        // 2. 100% Guaranteed Fallback: Cached vault thumbnail from internal app storage
+        val thumbFile = java.io.File(context.filesDir, "vault_thumbs/${doc.id}.webp")
+        if (thumbFile.exists() && thumbFile.length() > 0) {
+            try {
+                val bytes = thumbFile.readBytes()
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                android.util.Log.d("DocuSnapSync", "Successfully loaded cached vault thumbnail (${bytes.size} bytes)!")
+                return "data:image/webp;base64,$base64"
+            } catch (e: Exception) {
+                android.util.Log.e("DocuSnapSync", "Error reading thumbFile: ${e.message}")
+            }
+        }
+
+        return null
     }
 
     /**
@@ -358,6 +358,7 @@ class FirebaseSyncRepository(
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
                 for (change in snapshot.documentChanges) {
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) continue
                     val reqDoc = change.document
                     val docId = reqDoc.getString("docId") ?: continue
                     scope.launch {
@@ -379,25 +380,10 @@ class FirebaseSyncRepository(
 
             var resultUrl = doc.cloudStorageUrl
 
-            // If not yet uploaded, compress image from phone and fulfill
+            // If not yet uploaded, load high-res or thumbnail Data URL from phone
             if (resultUrl.isNullOrBlank()) {
-                val fullBytes = loadAndCompressImage(doc, maxDimension = 1400, quality = 80)
-                if (fullBytes != null && fullBytes.isNotEmpty()) {
-                    val base64Data = android.util.Base64.encodeToString(fullBytes, android.util.Base64.NO_WRAP)
-                    resultUrl = "data:image/jpeg;base64,$base64Data"
-
-                    // Try uploading to Firebase Storage in parallel if bucket is active
-                    try {
-                        val ref = storage.reference.child("users/$userId/full_res/$docId.jpg")
-                        ref.putBytes(fullBytes).await()
-                        val downloadUrl = ref.downloadUrl.await().toString()
-                        if (downloadUrl.isNotBlank()) {
-                            resultUrl = downloadUrl
-                        }
-                    } catch (storageEx: Exception) {
-                        android.util.Log.w("DocuSnapSync", "Storage upload fallback to direct dataUrl: ${storageEx.message}")
-                    }
-
+                resultUrl = loadFullOrThumbnailDataUrl(doc)
+                if (!resultUrl.isNullOrBlank()) {
                     // Save URL to local database and Firestore document so it persists permanently
                     documentDao.updateSyncStatus(docId, DocumentEntity.SYNC_STATUS_SYNCED, resultUrl)
                     firestore.collection("users").document(userId)
@@ -409,7 +395,7 @@ class FirebaseSyncRepository(
                 }
             }
 
-            // Report COMPLETED with the crisp full resolution image URL to Firestore
+            // Report COMPLETED with the crisp image URL to Firestore
             firestore.collection("users").document(userId)
                 .collection("media_requests").document(docId)
                 .set(mapOf(
