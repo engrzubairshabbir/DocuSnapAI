@@ -115,11 +115,16 @@ class FirebaseSyncRepository(
     suspend fun syncAllLocalDocuments() = withContext(Dispatchers.IO) {
         val uid = auth.currentUser?.uid ?: ensureAuthenticated()
         try {
-            val allDocs = documentDao.getAllDocumentsOnce()
-            android.util.Log.d("DocuSnapSync", "Starting fast text batch sync of ${allDocs.size} documents for user: $uid")
+            // ONLY fetch documents that are pending sync to prevent exhausting Firestore daily quota
+            val unsyncedDocs = documentDao.getDocumentsBySyncStatus(DocumentEntity.SYNC_STATUS_PENDING_SYNC)
+            if (unsyncedDocs.isEmpty()) {
+                android.util.Log.d("DocuSnapSync", "All documents already synced to cloud. Zero quota consumed.")
+                return@withContext
+            }
+            android.util.Log.d("DocuSnapSync", "Starting fast text batch sync of ${unsyncedDocs.size} unsynced documents for user: $uid")
             
             // Fast text metadata sync in chunks of 50 via WriteBatch (< 1-2 seconds total!)
-            for (chunk in allDocs.chunked(50)) {
+            for (chunk in unsyncedDocs.chunked(50)) {
                 val batch = firestore.batch()
                 for (doc in chunk) {
                     val docRef = firestore.collection("users")
@@ -143,6 +148,11 @@ class FirebaseSyncRepository(
                     batch.set(docRef, docData, SetOptions.merge())
                 }
                 batch.commit().await()
+                
+                // Immediately mark as SYNCED in local database so it is never pushed again
+                for (doc in chunk) {
+                    documentDao.updateSyncStatus(doc.id, DocumentEntity.SYNC_STATUS_SYNCED, doc.cloudStorageUrl)
+                }
             }
 
             android.util.Log.d("DocuSnapSync", "Batch text sync complete. Zero heavy image payloads uploaded.")
@@ -182,6 +192,11 @@ class FirebaseSyncRepository(
                     batch.set(docRef, docData, SetOptions.merge())
                 }
                 batch.commit().await()
+                
+                // Immediately mark as SYNCED in local database
+                for (doc in chunk) {
+                    documentDao.updateSyncStatus(doc.id, DocumentEntity.SYNC_STATUS_SYNCED, doc.cloudStorageUrl)
+                }
             }
             android.util.Log.d("DocuSnapSync", "Auto-synced ${documents.size} OCR texts to web vault!")
         } catch (e: Exception) {
@@ -343,7 +358,6 @@ class FirebaseSyncRepository(
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
                 for (change in snapshot.documentChanges) {
-                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) continue
                     val reqDoc = change.document
                     val docId = reqDoc.getString("docId") ?: continue
                     scope.launch {
@@ -372,35 +386,30 @@ class FirebaseSyncRepository(
                     val base64Data = android.util.Base64.encodeToString(fullBytes, android.util.Base64.NO_WRAP)
                     resultUrl = "data:image/jpeg;base64,$base64Data"
 
+                    // Try uploading to Firebase Storage in parallel if bucket is active
+                    try {
+                        val ref = storage.reference.child("users/$userId/full_res/$docId.jpg")
+                        ref.putBytes(fullBytes).await()
+                        val downloadUrl = ref.downloadUrl.await().toString()
+                        if (downloadUrl.isNotBlank()) {
+                            resultUrl = downloadUrl
+                        }
+                    } catch (storageEx: Exception) {
+                        android.util.Log.w("DocuSnapSync", "Storage upload fallback to direct dataUrl: ${storageEx.message}")
+                    }
+
                     // Save URL to local database and Firestore document so it persists permanently
                     documentDao.updateSyncStatus(docId, DocumentEntity.SYNC_STATUS_SYNCED, resultUrl)
                     firestore.collection("users").document(userId)
                         .collection("documents").document(docId)
                         .update("cloud_storage_url", resultUrl).await()
-
-                    // In parallel background, attempt upload to Firebase Storage bucket if accessible
-                    scope.launch {
-                        try {
-                            val ref = storage.reference.child("users/$userId/full_res/$docId.jpg")
-                            ref.putBytes(fullBytes).await()
-                            val downloadUrl = ref.downloadUrl.await().toString()
-                            if (downloadUrl.isNotBlank()) {
-                                documentDao.updateSyncStatus(docId, DocumentEntity.SYNC_STATUS_SYNCED, downloadUrl)
-                                firestore.collection("users").document(userId)
-                                    .collection("documents").document(docId)
-                                    .update("cloud_storage_url", downloadUrl).await()
-                            }
-                        } catch (storageEx: Exception) {
-                            android.util.Log.w("DocuSnapSync", "Storage upload fallback to direct dataUrl: ${storageEx.message}")
-                        }
-                    }
                 } else {
                     reportMediaRequestFailed(userId, docId, "Image file could not be read on phone")
                     return@withContext
                 }
             }
 
-            // Immediately report COMPLETED with the crisp full resolution image URL to Firestore
+            // Report COMPLETED with the crisp full resolution image URL to Firestore
             firestore.collection("users").document(userId)
                 .collection("media_requests").document(docId)
                 .set(mapOf(

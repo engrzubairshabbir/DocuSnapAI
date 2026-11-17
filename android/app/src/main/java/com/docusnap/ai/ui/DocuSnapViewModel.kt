@@ -275,8 +275,12 @@ class DocuSnapViewModel(application: Application) : AndroidViewModel(application
      */
     fun startContinuousGalleryScan() {
         if (scanJob?.isActive == true) return
-        scanJob = viewModelScope.launch(Dispatchers.IO) {
-            val context = getApplication<DocuSnapApplication>()
+        val app = getApplication<DocuSnapApplication>()
+        // Ensure MediaObserver Foreground Service is running so OS doesn't throttle background CPU
+        com.docusnap.ai.service.MediaObserverService.start(app)
+        
+        scanJob = app.applicationScope.launch {
+            val context = app
             val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
             val wakeLock = pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "DocuSnap::GalleryScanWakeLock")
             wakeLock?.acquire(60 * 60 * 1000L) // 1 hour safe wakelock

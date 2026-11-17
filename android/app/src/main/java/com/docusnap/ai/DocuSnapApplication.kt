@@ -15,6 +15,8 @@ import com.docusnap.ai.sync.FirebaseSyncRepository
 
 class DocuSnapApplication : Application() {
 
+    val applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
     lateinit var database: AppDatabase
         private set
 
