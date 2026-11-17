@@ -185,7 +185,7 @@ class GeminiReasoningEngine(
         // Extract international currency amount if present
         var totalAmount: Double? = null
         val amountPattern = Pattern.compile(
-            """(?:total|amount|subtotal|合計|請求額|합계|usd|eur|gbp|jpy|¥|\$|€|£)\s*[:=]?\s*([0-9]+(?:[.,][0-9]{1,2})?)""",
+            """(?:total|amount|subtotal|合計|請求額|합계|usd|eur|gbp|jpy|rs\.?|pkr|inr|¥|\$|€|£)\s*[:=]?\s*(?:rs\.?|pkr|inr|\$|€|£|¥)?\s*([0-9]+(?:[.,][0-9]{1,2})?)""",
             Pattern.CASE_INSENSITIVE
         )
         val amountMatcher = amountPattern.matcher(rawText)
@@ -197,10 +197,10 @@ class GeminiReasoningEngine(
         // Extract medicines if medical
         val medicines = mutableListOf<String>()
         if (isMedical) {
-            val medPattern = Pattern.compile("""(?:tab|cap|syp|inj)?\.?\s*([A-Za-z0-9\-]+)\s*(\d+\s*mg)?""", Pattern.CASE_INSENSITIVE)
+            val medPattern = Pattern.compile("""(?:tab|cap|syp|inj|tablet|capsule|syrup)\.?\s*([A-Za-z0-9\-]+(?:\s*\d+\s*(?:mg|ml))?)""", Pattern.CASE_INSENSITIVE)
             val medMatcher = medPattern.matcher(rawText)
             var count = 0
-            while (medMatcher.find() && count < 5) {
+            while (medMatcher.find() && count < 10) {
                 val match = medMatcher.group().trim()
                 if (match.length > 3 && !match.equals("prescription", true)) {
                     medicines.add(match)
@@ -210,8 +210,8 @@ class GeminiReasoningEngine(
         }
 
         val tags = mutableListOf<String>()
-        tags.add(docType.lowercase())
-        if (isMedical) tags.addAll(listOf("health", "medicine", "prescription"))
+        tags.add(docType.lowercase(Locale.ROOT))
+        if (isMedical) tags.addAll(listOf("medical", "health", "medicine", "prescription"))
         if (isReceipt || isUtility) tags.addAll(listOf("finance", "expense", "bill"))
 
         val firstLine = rawText.lines().firstOrNull { it.isNotBlank() }?.take(40) ?: "Captured Image"

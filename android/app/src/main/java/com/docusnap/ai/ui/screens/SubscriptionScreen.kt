@@ -79,10 +79,11 @@ fun SubscriptionScreen(
     }
 
     val allTiers = listOf(
+        SubscriptionTier.STARTER,
         SubscriptionTier.SILVER,
         SubscriptionTier.GOLD,
-        SubscriptionTier.PLATINUM,
-        SubscriptionTier.ENTERPRISE
+        SubscriptionTier.ENTERPRISE,
+        SubscriptionTier.INFINITY
     )
 
     val oneTimePresets = listOf(99, 199, 299, 499, 749, 999)
@@ -351,6 +352,20 @@ fun SubscriptionScreen(
                                                 Text(
                                                     text = "100% No Ads",
                                                     color = AccentEmerald,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        } else if (tier == SubscriptionTier.STARTER) {
+                                            Surface(
+                                                color = AccentAmber.copy(alpha = 0.18f),
+                                                shape = RoundedCornerShape(6.dp),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, AccentAmber.copy(alpha = 0.6f))
+                                            ) {
+                                                Text(
+                                                    text = "Fewer Ads",
+                                                    color = AccentAmber,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)

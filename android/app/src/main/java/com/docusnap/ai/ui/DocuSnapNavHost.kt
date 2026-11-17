@@ -45,11 +45,51 @@ sealed class Screen(val route: String, val titleKey: String) {
 
 @Composable
 fun DocuSnapNavHost(viewModel: DocuSnapViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val currentLang by viewModel.currentLanguage.collectAsState()
     val currentUser by viewModel.syncRepo.currentUserFlow.collectAsState()
+    val quotaNotice by viewModel.quotaNotice.collectAsState()
+
+    // Global Storage Quota Limit Dialog & Smart Plan Recommendation
+    quotaNotice?.let { notice ->
+        com.docusnap.ai.ui.components.QuotaLimitDialog(
+            notice = notice,
+            onUpgrade = {
+                viewModel.clearQuotaNotice()
+                navController.navigate(Screen.Subscription.route) {
+                    launchSingleTop = true
+                }
+            },
+            onReduceGallery = {
+                viewModel.clearQuotaNotice()
+                val galleryIntent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                    type = "image/*"
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                try {
+                    context.startActivity(galleryIntent)
+                } catch (_: Exception) {
+                    android.widget.Toast.makeText(context, "Open your Photos/Gallery app to delete unwanted photos.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            },
+            onAddManually = {
+                viewModel.clearQuotaNotice()
+                navController.navigate(Screen.Vault.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            },
+            onDismiss = {
+                viewModel.clearQuotaNotice()
+            }
+        )
+    }
 
     val bottomNavItems = listOf(
         Screen.Search to Icons.Default.AutoAwesome,

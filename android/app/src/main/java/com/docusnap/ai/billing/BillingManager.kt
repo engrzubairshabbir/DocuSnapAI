@@ -37,75 +37,102 @@ enum class SubscriptionTier(
             "SQLite FTS5 instant smart search"
         )
     ),
-    SILVER(
-        id = "docusnap_sub_silver_299",
-        title = "Silver Vault (Pro Organizer)",
-        priceUsd = "$2.99 / mo",
+    STARTER(
+        id = "docusnap_sub_starter_499",
+        title = "Starter Pro (Essential Vault)",
+        priceUsd = "$4.99 / mo",
         maxDocuments = 2000,
         maxFileSizeMb = 3.0f,
-        adFree = true,
+        adFree = false,
         features = listOf(
             "Scan & index files up to 3.0 MB",
-            "100% Ad-Free Experience",
-            "Up to 2,000 indexed documents",
+            "Fewer Ads Experience",
+            "Up to 2,000 indexed documents / photos",
             "Secure Private Cloud Backup (Zero Data Loss)",
             "Remote Web Search from Laptop / Browser",
             "Auto-extract medicine dosages & totals"
         )
     ),
-    GOLD(
-        id = "docusnap_sub_gold_999",
-        title = "Gold Vault (Clinic & Business)",
+    SILVER(
+        id = "docusnap_sub_silver_999",
+        title = "Silver Vault (Pro Organizer)",
         priceUsd = "$9.99 / mo",
         maxDocuments = 5000,
         maxFileSizeMb = 8.0f,
+        adFree = true,
+        features = listOf(
+            "Scan & index files & PDFs up to 8.0 MB",
+            "100% Ad-Free Experience",
+            "Up to 5,000 indexed documents / PDFs",
+            "24/7 Remote Access (docusnap.consultways.com)",
+            "Priority Cloud Backup & Real-time Web Sync",
+            "Fast Gemini Flash AI Medical & Bill Reasoning"
+        )
+    ),
+    GOLD(
+        id = "docusnap_sub_gold_1499",
+        title = "Gold Vault (Clinic & Business)",
+        priceUsd = "$14.99 / mo",
+        maxDocuments = 10000,
+        maxFileSizeMb = 15.0f,
         isPopular = true,
         adFree = true,
         features = listOf(
-            "Scan & index files up to 8.0 MB (High-Res & PDFs)",
+            "Scan & index files up to 15.0 MB",
             "100% Ad-Free Experience",
-            "Up to 5,000 indexed documents",
-            "Priority Private Cloud Backup & Sync",
-            "Remote Web Search & Hi-Res Original Sharing",
-            "Fastest priority Gemini Flash reasoning"
-        )
-    ),
-    PLATINUM(
-        id = "docusnap_sub_platinum_2999",
-        title = "Platinum Master (Enterprise VIP)",
-        priceUsd = "$29.99 / mo",
-        maxDocuments = 10000,
-        maxFileSizeMb = 15.0f,
-        adFree = true,
-        features = listOf(
-            "Scan & index files up to 15.0 MB (Heavy Multi-page Docs)",
-            "100% Ad-Free Experience",
-            "Up to 10,000 indexed documents",
-            "High-capacity bulk gallery ingestion",
-            "Cross-platform real-time sync & search",
-            "Dedicated secure cloud storage vault"
+            "Up to 10,000 indexed documents / PDFs",
+            "24/7 Remote Access (docusnap.consultways.com)",
+            "Private & Secure Backup (Zero Data Loss)",
+            "Instant multi-page PDF & entity extraction",
+            "Hi-Res photo remote retrieval"
         )
     ),
     ENTERPRISE(
-        id = "docusnap_sub_enterprise_4999",
-        title = "Infinity Diamond (Corporate Suite)",
-        priceUsd = "$49.99 / mo",
+        id = "docusnap_sub_enterprise_2599",
+        title = "Platinum Enterprise (Business Suite)",
+        priceUsd = "$25.99 / mo",
         maxDocuments = 25000,
+        maxFileSizeMb = 25.0f,
+        adFree = true,
+        features = listOf(
+            "Scan & index files up to 25.0 MB",
+            "100% Ad-Free Experience",
+            "Up to 25,000 indexed documents / PDFs",
+            "24/7 Seamless Remote Web Access",
+            "Private & Secure Encrypted Cloud Backup",
+            "Dedicated Customer Service Support",
+            "Bulk document export in JSON / CSV"
+        )
+    ),
+    INFINITY(
+        id = "docusnap_sub_infinity_4999",
+        title = "Infinity Diamond (Ultimate Suite)",
+        priceUsd = "$49.99 / mo",
+        maxDocuments = 50000,
         maxFileSizeMb = 50.0f,
         adFree = true,
         features = listOf(
-            "Scan & index files up to 50.0 MB (Full Medical Records)",
-            "100% Ad-Free Experience",
-            "Up to 25,000 indexed documents",
-            "Maximum capacity for clinics & law offices",
-            "Instant global web search anywhere, anytime",
-            "Full data export in JSON / CSV"
+            "Scan & index files up to 50.0 MB",
+            "100% No Ads At All (Pure VIP)",
+            "Up to 50,000 indexed documents / PDFs",
+            "24/7 Seamless Remote Access",
+            "Private & Secure Cloud Backup",
+            "Dedicated Customer Service Support",
+            "Dedicated High-Speed Sync Servers",
+            "State-of-the-Art End-to-End Encryption"
         )
     );
 
     companion object {
         fun fromId(id: String): SubscriptionTier {
-            return entries.firstOrNull { it.id == id } ?: FREE
+            return when (id) {
+                STARTER.id -> STARTER
+                SILVER.id, "docusnap_sub_silver_299" -> SILVER
+                GOLD.id, "docusnap_sub_gold_999" -> GOLD
+                ENTERPRISE.id, "docusnap_sub_platinum_2999" -> ENTERPRISE
+                INFINITY.id, "docusnap_sub_enterprise_4999" -> INFINITY
+                else -> entries.firstOrNull { it.id == id } ?: FREE
+            }
         }
     }
 }
@@ -212,10 +239,11 @@ class BillingManager(private val context: Context) : PurchasesUpdatedListener {
 
     private fun queryAvailableSubscriptions() {
         val productList = listOf(
+            SubscriptionTier.STARTER.id,
             SubscriptionTier.SILVER.id,
             SubscriptionTier.GOLD.id,
-            SubscriptionTier.PLATINUM.id,
-            SubscriptionTier.ENTERPRISE.id
+            SubscriptionTier.ENTERPRISE.id,
+            SubscriptionTier.INFINITY.id
         ).map { id ->
             QueryProductDetailsParams.Product.newBuilder()
                 .setProductId(id)

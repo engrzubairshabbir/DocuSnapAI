@@ -12,16 +12,18 @@ class BillingAndLanguageTest {
     @Test
     fun subscriptionTiers_haveCorrectLimitsAndPricing() {
         assertEquals(500, SubscriptionTier.FREE.maxDocuments)
-        assertEquals(2000, SubscriptionTier.SILVER.maxDocuments)
-        assertEquals(5000, SubscriptionTier.GOLD.maxDocuments)
-        assertEquals(10000, SubscriptionTier.PLATINUM.maxDocuments)
-        assertEquals(15000, SubscriptionTier.ENTERPRISE.maxDocuments)
+        assertEquals(2000, SubscriptionTier.STARTER.maxDocuments)
+        assertEquals(5000, SubscriptionTier.SILVER.maxDocuments)
+        assertEquals(10000, SubscriptionTier.GOLD.maxDocuments)
+        assertEquals(25000, SubscriptionTier.ENTERPRISE.maxDocuments)
+        assertEquals(50000, SubscriptionTier.INFINITY.maxDocuments)
 
         assertEquals("$0.00", SubscriptionTier.FREE.priceUsd)
-        assertEquals("$2.99 / mo", SubscriptionTier.SILVER.priceUsd)
-        assertEquals("$9.99 / mo", SubscriptionTier.GOLD.priceUsd)
-        assertEquals("$29.99 / mo", SubscriptionTier.PLATINUM.priceUsd)
-        assertEquals("$49.99 / mo", SubscriptionTier.ENTERPRISE.priceUsd)
+        assertEquals("$4.99 / mo", SubscriptionTier.STARTER.priceUsd)
+        assertEquals("$9.99 / mo", SubscriptionTier.SILVER.priceUsd)
+        assertEquals("$14.99 / mo", SubscriptionTier.GOLD.priceUsd)
+        assertEquals("$25.99 / mo", SubscriptionTier.ENTERPRISE.priceUsd)
+        assertEquals("$49.99 / mo", SubscriptionTier.INFINITY.priceUsd)
     }
 
     @Test

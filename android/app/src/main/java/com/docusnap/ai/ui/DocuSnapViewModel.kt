@@ -27,6 +27,13 @@ data class ConversationalSearchState(
     val matchedDocuments: List<DocumentEntity> = emptyList()
 )
 
+data class QuotaNotice(
+    val indexedCount: Int,
+    val maxLimit: Int,
+    val totalGalleryCount: Int,
+    val recommendedTier: SubscriptionTier
+)
+
 data class GalleryScanProgress(
     val isScanning: Boolean = false,
     val isCoolingDown: Boolean = false,
@@ -51,6 +58,38 @@ class DocuSnapViewModel(application: Application) : AndroidViewModel(application
     val scanProgress: StateFlow<GalleryScanProgress> = _scanProgress.asStateFlow()
     private var scanJob: Job? = null
     private val skipCooldownTrigger = MutableStateFlow(0)
+
+    // Quota Limit Reached Notice & Dynamic Recommendation
+    private val _quotaNotice = MutableStateFlow<QuotaNotice?>(null)
+    val quotaNotice: StateFlow<QuotaNotice?> = _quotaNotice.asStateFlow()
+
+    fun clearQuotaNotice() {
+        _quotaNotice.value = null
+    }
+
+    fun promptQuotaNoticeIfLimitReached() {
+        val totalInGallery = _scanProgress.value.totalGalleryCount
+        val indexed = _scanProgress.value.indexedCount
+        val effectiveMax = maxOf(activeTier.value.maxDocuments, OneTimeSku.maxDocsForAmount(lifetimeAmountUsd.value))
+        if (indexed >= effectiveMax) {
+            _quotaNotice.value = QuotaNotice(
+                indexedCount = indexed,
+                maxLimit = effectiveMax,
+                totalGalleryCount = totalInGallery,
+                recommendedTier = getRecommendedTierForGallery(totalInGallery)
+            )
+        }
+    }
+
+    fun getRecommendedTierForGallery(totalGalleryPhotos: Int): SubscriptionTier {
+        return when {
+            totalGalleryPhotos > 25_000 -> SubscriptionTier.INFINITY
+            totalGalleryPhotos > 10_000 -> SubscriptionTier.ENTERPRISE
+            totalGalleryPhotos > 5_000 -> SubscriptionTier.GOLD
+            totalGalleryPhotos > 2_000 -> SubscriptionTier.SILVER
+            else -> SubscriptionTier.STARTER
+        }
+    }
 
     // Billing Manager & Tier
     val billingManager = BillingManager.getInstance(application)
@@ -289,6 +328,26 @@ class DocuSnapViewModel(application: Application) : AndroidViewModel(application
                 val isLimited = com.docusnap.ai.service.MediaIngestionWorker.isPartialPhotoAccess(context)
                 val totalInGallery = com.docusnap.ai.service.MediaIngestionWorker.queryTotalGalleryCount(context)
                 var indexed = docDao.getTotalCount()
+                val effectiveMax = maxOf(activeTier.value.maxDocuments, OneTimeSku.maxDocsForAmount(lifetimeAmountUsd.value))
+
+                if (indexed >= effectiveMax) {
+                    val recTier = getRecommendedTierForGallery(totalInGallery)
+                    _quotaNotice.value = QuotaNotice(
+                        indexedCount = indexed,
+                        maxLimit = effectiveMax,
+                        totalGalleryCount = totalInGallery,
+                        recommendedTier = recTier
+                    )
+                    _scanProgress.value = GalleryScanProgress(
+                        isScanning = false,
+                        totalGalleryCount = totalInGallery,
+                        indexedCount = indexed,
+                        percent = if (totalInGallery > 0) (indexed * 100 / totalInGallery).coerceIn(0, 100) else 0,
+                        isLimitedAccess = isLimited,
+                        statusMessage = "Quota reached ($indexed/$effectiveMax). Upgrade plan to continue."
+                    )
+                    return@launch
+                }
 
                 val scanPrefs = context.getSharedPreferences("docusnap_scan_prefs", Context.MODE_PRIVATE)
                 var offset = scanPrefs.getInt("last_gallery_offset", 0)
@@ -330,6 +389,22 @@ class DocuSnapViewModel(application: Application) : AndroidViewModel(application
                         percent = currentPercent,
                         currentBatchProcessed = newDocs.size
                     )
+
+                    if (indexed >= effectiveMax) {
+                        val recTier = getRecommendedTierForGallery(totalInGallery)
+                        _quotaNotice.value = QuotaNotice(
+                            indexedCount = indexed,
+                            maxLimit = effectiveMax,
+                            totalGalleryCount = totalInGallery,
+                            recommendedTier = recTier
+                        )
+                        _scanProgress.value = _scanProgress.value.copy(
+                            isScanning = false,
+                            isCoolingDown = false,
+                            statusMessage = "Quota reached ($indexed/$effectiveMax). Upgrade plan to continue."
+                        )
+                        break
+                    }
 
                     if (offset >= totalInGallery) {
                         scanPrefs.edit().putInt("last_gallery_offset", 0).apply()
