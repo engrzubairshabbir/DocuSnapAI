@@ -285,8 +285,9 @@ export function requestMediaFromPhone(
     setDoc(reqRef, {
       docId,
       status: 'PENDING',
+      error: null,
       requestedAt: Date.now()
-    }, { merge: true });
+    });
 
     const unsubscribe = onSnapshot(reqRef, (snapshot) => {
       if (!snapshot.exists()) return;

@@ -277,35 +277,55 @@ class FirebaseSyncRepository(
             }
     }
 
-    private fun compressImage(uri: Uri, maxDimension: Int, quality: Int): ByteArray? {
+    private fun loadAndCompressImage(doc: DocumentEntity, maxDimension: Int = 1400, quality: Int = 80): ByteArray? {
+        // 1. Try original local image URI
+        if (doc.localImageUri.isNotBlank()) {
+            val bytes = compressFromUri(Uri.parse(doc.localImageUri), maxDimension, quality)
+            if (bytes != null && bytes.isNotEmpty()) return bytes
+        }
+        // 2. Fallback to cached vault thumbnail
+        val thumbFile = java.io.File(context.filesDir, "vault_thumbs/${doc.id}.webp")
+        if (thumbFile.exists()) {
+            val bytes = compressFromUri(Uri.fromFile(thumbFile), maxDimension, quality)
+            if (bytes != null && bytes.isNotEmpty()) return bytes
+        }
+        return null
+    }
+
+    private fun compressFromUri(uri: Uri, maxDimension: Int, quality: Int): ByteArray? {
         return try {
-            val stream = context.contentResolver.openInputStream(uri) ?: return null
-            val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeStream(stream, null, boundsOptions)
-            stream.close()
+            fun openStream(): java.io.InputStream? {
+                return if (uri.scheme == "content") {
+                    context.contentResolver.openInputStream(uri)
+                } else {
+                    val path = uri.path ?: uri.toString()
+                    java.io.FileInputStream(java.io.File(path))
+                }
+            }
+
+            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            openStream()?.use { BitmapFactory.decodeStream(it, null, boundsOpts) } ?: return null
 
             var sampleSize = 1
-            var w = boundsOptions.outWidth
-            var h = boundsOptions.outHeight
+            var w = boundsOpts.outWidth
+            var h = boundsOpts.outHeight
+            if (w <= 0 || h <= 0) return null
+
             while (w / 2 >= maxDimension || h / 2 >= maxDimension) {
                 w /= 2
                 h /= 2
                 sampleSize *= 2
             }
 
-            val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-            val secondStream = context.contentResolver.openInputStream(uri) ?: return null
-            val bitmap = BitmapFactory.decodeStream(secondStream, null, decodeOptions)
-            secondStream.close()
-
-            if (bitmap == null) return null
+            val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val bitmap = openStream()?.use { BitmapFactory.decodeStream(it, null, decodeOpts) } ?: return null
 
             val outStream = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outStream)
             bitmap.recycle()
             outStream.toByteArray()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("DocuSnapSync", "compressFromUri error for $uri: ${e.message}")
             null
         }
     }
@@ -323,6 +343,7 @@ class FirebaseSyncRepository(
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
                 for (change in snapshot.documentChanges) {
+                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) continue
                     val reqDoc = change.document
                     val docId = reqDoc.getString("docId") ?: continue
                     scope.launch {
@@ -335,47 +356,78 @@ class FirebaseSyncRepository(
     suspend fun fulfillMediaRequest(userId: String, docId: String) = withContext(Dispatchers.IO) {
         try {
             android.util.Log.d("DocuSnapSync", "Fulfilling on-demand full resolution media request for docId: $docId")
-            val doc = documentDao.getDocumentById(docId) ?: return@withContext
-            var cloudUrl = doc.cloudStorageUrl
+            val doc = documentDao.getDocumentById(docId)
+            if (doc == null) {
+                android.util.Log.w("DocuSnapSync", "Document not found in local Room DB for docId: $docId")
+                reportMediaRequestFailed(userId, docId, "Document not found on phone")
+                return@withContext
+            }
 
-            if (cloudUrl.isNullOrBlank() && doc.localImageUri.isNotBlank()) {
-                val imageUri = Uri.parse(doc.localImageUri)
-                val fullBytes = compressImage(imageUri, maxDimension = 1800, quality = 85)
-                if (fullBytes != null) {
-                    val ref = storage.reference.child("users/$userId/full_res/$docId.jpg")
-                    val uploadTask = ref.putBytes(fullBytes).await()
-                    cloudUrl = uploadTask.storage.downloadUrl.await().toString()
+            var resultUrl = doc.cloudStorageUrl
 
-                    documentDao.updateSyncStatus(docId, DocumentEntity.SYNC_STATUS_SYNCED, cloudUrl)
+            // If not yet uploaded, compress image from phone and fulfill
+            if (resultUrl.isNullOrBlank()) {
+                val fullBytes = loadAndCompressImage(doc, maxDimension = 1400, quality = 80)
+                if (fullBytes != null && fullBytes.isNotEmpty()) {
+                    val base64Data = android.util.Base64.encodeToString(fullBytes, android.util.Base64.NO_WRAP)
+                    resultUrl = "data:image/jpeg;base64,$base64Data"
+
+                    // Save URL to local database and Firestore document so it persists permanently
+                    documentDao.updateSyncStatus(docId, DocumentEntity.SYNC_STATUS_SYNCED, resultUrl)
                     firestore.collection("users").document(userId)
                         .collection("documents").document(docId)
-                        .update("cloud_storage_url", cloudUrl).await()
+                        .update("cloud_storage_url", resultUrl).await()
+
+                    // In parallel background, attempt upload to Firebase Storage bucket if accessible
+                    scope.launch {
+                        try {
+                            val ref = storage.reference.child("users/$userId/full_res/$docId.jpg")
+                            ref.putBytes(fullBytes).await()
+                            val downloadUrl = ref.downloadUrl.await().toString()
+                            if (downloadUrl.isNotBlank()) {
+                                documentDao.updateSyncStatus(docId, DocumentEntity.SYNC_STATUS_SYNCED, downloadUrl)
+                                firestore.collection("users").document(userId)
+                                    .collection("documents").document(docId)
+                                    .update("cloud_storage_url", downloadUrl).await()
+                            }
+                        } catch (storageEx: Exception) {
+                            android.util.Log.w("DocuSnapSync", "Storage upload fallback to direct dataUrl: ${storageEx.message}")
+                        }
+                    }
+                } else {
+                    reportMediaRequestFailed(userId, docId, "Image file could not be read on phone")
+                    return@withContext
                 }
             }
 
+            // Immediately report COMPLETED with the crisp full resolution image URL to Firestore
             firestore.collection("users").document(userId)
                 .collection("media_requests").document(docId)
                 .set(mapOf(
                     "docId" to docId,
                     "status" to "COMPLETED",
-                    "cloud_storage_url" to (cloudUrl ?: ""),
+                    "cloud_storage_url" to resultUrl,
                     "completedAt" to System.currentTimeMillis()
                 ), SetOptions.merge()).await()
 
-            android.util.Log.d("DocuSnapSync", "Media request fulfilled successfully with URL: $cloudUrl")
+            android.util.Log.d("DocuSnapSync", "Media request fulfilled successfully for $docId!")
         } catch (e: Exception) {
             android.util.Log.e("DocuSnapSync", "Failed to fulfill media request for $docId: ${e.message}")
-            try {
-                firestore.collection("users").document(userId)
-                    .collection("media_requests").document(docId)
-                    .set(mapOf(
-                        "docId" to docId,
-                        "status" to "FAILED",
-                        "error" to (e.localizedMessage ?: "Failed to upload from phone"),
-                        "completedAt" to System.currentTimeMillis()
-                    ), SetOptions.merge()).await()
-            } catch (_: Exception) {}
+            reportMediaRequestFailed(userId, docId, e.localizedMessage ?: "Failed to upload from phone")
         }
+    }
+
+    private suspend fun reportMediaRequestFailed(userId: String, docId: String, error: String) {
+        try {
+            firestore.collection("users").document(userId)
+                .collection("media_requests").document(docId)
+                .set(mapOf(
+                    "docId" to docId,
+                    "status" to "FAILED",
+                    "error" to error,
+                    "completedAt" to System.currentTimeMillis()
+                ), SetOptions.merge()).await()
+        } catch (_: Exception) {}
     }
 
     fun signOut() {

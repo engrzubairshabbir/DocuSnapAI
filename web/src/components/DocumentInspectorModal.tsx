@@ -217,6 +217,10 @@ export const DocumentInspectorModal: React.FC<Props> = ({
                   <img
                     src={effectiveImageUrl}
                     alt={document.title}
+                    onError={() => {
+                      setResolvedImageUrl(null);
+                      setFetchError("Unable to render image. Tap 'Retrieve Full Image from Phone' to reload.");
+                    }}
                     style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
                     className="max-w-full max-h-full object-contain transition-transform duration-200"
                   />
