@@ -92,7 +92,11 @@ class FirebaseSyncRepository(
                 "lastDevice" to "Android (${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL})",
                 "lastActive" to System.currentTimeMillis()
             )
-            firestore.collection("users").document(user.uid).set(profile, SetOptions.merge()).await()
+            try {
+                firestore.collection("users").document(user.uid).set(profile, SetOptions.merge()).await()
+            } catch (e: Exception) {
+                android.util.Log.w("DocuSnapSync", "Profile doc sync warning: ${e.message}")
+            }
 
             listenToRemoteChanges(user.uid)
             syncAllLocalDocuments()

@@ -648,17 +648,19 @@ class MediaIngestionWorker(
                         ocr.recognizeText(uri)
                     }
 
-                    if (rawOcrText.trim().length >= 4 || isScreenshot || isCamera || isPdf) {
-                        val semantic = if (rawOcrText.trim().length >= 4) {
-                            gemini.analyzeDocument(rawOcrText)
+                    val hasReadableText = rawOcrText.trim().length >= 4
+                    if (hasReadableText || isScreenshot || isPdf) {
+                        // High-speed on-device semantic classification (zero cloud network delay or API rate-limits during bulk batch scan)
+                        val semantic = if (hasReadableText) {
+                            gemini.fallbackExtraction(rawOcrText)
                         } else {
                             val todayLabel = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
                             GeminiExtractionResult(
                                 documentType = if (isPdf) DocumentEntity.TYPE_UTILITY else DocumentEntity.TYPE_GENERAL,
-                                title = "Photo Document ($todayLabel)",
-                                summary = "Auto-saved photo document in Smart Vault.",
+                                title = if (isScreenshot) "Screenshot Document ($todayLabel)" else "Document ($todayLabel)",
+                                summary = "Auto-saved document in Smart Vault.",
                                 keyEntities = KeyEntities(date = todayLabel.substring(0, 10)),
-                                searchableTags = listOf("photo", "gallery", "vault")
+                                searchableTags = listOf(if (isScreenshot) "screenshot" else "document", "vault")
                             )
                         }
 
@@ -694,8 +696,8 @@ class MediaIngestionWorker(
                         dao.insertDocument(entity)
                         newlyCreated.add(entity)
 
-                        // Gentle throttle to keep device cool and zero CPU impact
-                        kotlinx.coroutines.delay(12)
+                        // Micro yield to keep UI responsive
+                        kotlinx.coroutines.delay(2)
                     }
                 } catch (e: Exception) {
                     Log.e("DocuSnapIngestion", "Error in batch item $uri: ${e.message}")

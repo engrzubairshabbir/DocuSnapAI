@@ -269,77 +269,83 @@ class DocuSnapViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
-     * Continuous automated gallery scanner:
-     * Indexes batches of 50 images with on-device OCR -> Pushes OCR text to Web -> Pauses 2 mins -> repeats.
+     * High-speed continuous automated gallery scanner:
+     * Scans on-device ML Kit OCR in batches of 50 -> Pushes OCR text to Web -> Gentle 1s breather -> Continues.
+     * Uses WakeLock to ensure smooth background scanning without sleeping.
      */
     fun startContinuousGalleryScan() {
         if (scanJob?.isActive == true) return
         scanJob = viewModelScope.launch(Dispatchers.IO) {
             val context = getApplication<DocuSnapApplication>()
-            val isLimited = com.docusnap.ai.service.MediaIngestionWorker.isPartialPhotoAccess(context)
-            val totalInGallery = com.docusnap.ai.service.MediaIngestionWorker.queryTotalGalleryCount(context)
-            var indexed = docDao.getTotalCount()
-            val maxTierDocs = maxOf(activeTier.value.maxDocuments, OneTimeSku.maxDocsForAmount(lifetimeAmountUsd.value))
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            val wakeLock = pm?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "DocuSnap::GalleryScanWakeLock")
+            wakeLock?.acquire(60 * 60 * 1000L) // 1 hour safe wakelock
 
-            _scanProgress.value = GalleryScanProgress(
-                isScanning = true,
-                totalGalleryCount = totalInGallery,
-                indexedCount = indexed,
-                percent = if (totalInGallery > 0) (indexed * 100 / totalInGallery).coerceIn(0, 100) else 0,
-                isLimitedAccess = isLimited,
-                statusMessage = "Starting automated gallery indexing..."
-            )
+            try {
+                val isLimited = com.docusnap.ai.service.MediaIngestionWorker.isPartialPhotoAccess(context)
+                val totalInGallery = com.docusnap.ai.service.MediaIngestionWorker.queryTotalGalleryCount(context)
+                var indexed = docDao.getTotalCount()
 
-            var offset = 0
-            while (coroutineContext.isActive && indexed < totalInGallery && indexed < maxTierDocs) {
-                _scanProgress.value = _scanProgress.value.copy(
+                val scanPrefs = context.getSharedPreferences("docusnap_scan_prefs", Context.MODE_PRIVATE)
+                var offset = scanPrefs.getInt("last_gallery_offset", 0)
+                if (offset >= totalInGallery) {
+                    offset = 0
+                }
+
+                _scanProgress.value = GalleryScanProgress(
                     isScanning = true,
-                    isCoolingDown = false,
-                    statusMessage = "Indexing batch of 50 images with on-device OCR..."
-                )
-
-                val newDocs = com.docusnap.ai.service.MediaIngestionWorker.processBatch(context, batchSize = 50, offset = offset)
-                indexed = docDao.getTotalCount()
-                offset += 50
-
-                if (newDocs.isNotEmpty()) {
-                    _scanProgress.value = _scanProgress.value.copy(
-                        statusMessage = "Pushing ${newDocs.size} OCR texts to website vault..."
-                    )
-                    syncRepo.syncBatchDocuments(newDocs)
-                }
-
-                val currentPercent = if (totalInGallery > 0) (indexed * 100 / totalInGallery).coerceIn(0, 100) else 100
-                _scanProgress.value = _scanProgress.value.copy(
+                    totalGalleryCount = totalInGallery,
                     indexedCount = indexed,
-                    percent = currentPercent,
-                    currentBatchProcessed = newDocs.size
+                    percent = if (totalInGallery > 0) (offset * 100 / totalInGallery).coerceIn(0, 100) else 0,
+                    isLimitedAccess = isLimited,
+                    statusMessage = "Starting fast gallery indexing..."
                 )
 
-                if (newDocs.isEmpty() && offset >= totalInGallery) {
-                    break
-                }
+                while (coroutineContext.isActive && offset < totalInGallery) {
+                    _scanProgress.value = _scanProgress.value.copy(
+                        isScanning = true,
+                        isCoolingDown = false,
+                        statusMessage = "Scanning photos ${offset + 1} - ${minOf(offset + 50, totalInGallery)} of $totalInGallery..."
+                    )
 
-                // 2-minute battery-saving cooldown with skip capability
-                if (indexed < totalInGallery && indexed < maxTierDocs) {
-                    val initialTrigger = skipCooldownTrigger.value
-                    for (sec in 120 downTo 1) {
-                        if (!coroutineContext.isActive || skipCooldownTrigger.value != initialTrigger) break
+                    val newDocs = com.docusnap.ai.service.MediaIngestionWorker.processBatch(context, batchSize = 50, offset = offset)
+                    indexed = docDao.getTotalCount()
+                    offset += 50
+                    scanPrefs.edit().putInt("last_gallery_offset", offset).apply()
+
+                    if (newDocs.isNotEmpty()) {
                         _scanProgress.value = _scanProgress.value.copy(
-                            isCoolingDown = true,
-                            cooldownRemainingSec = sec,
-                            statusMessage = "Batch of 50 synced! Pausing 2 mins to preserve battery (${sec}s remaining)..."
+                            statusMessage = "Pushing ${newDocs.size} new documents to web vault..."
                         )
-                        delay(1000)
+                        syncRepo.syncBatchDocuments(newDocs)
                     }
-                }
-            }
 
-            _scanProgress.value = _scanProgress.value.copy(
-                isScanning = false,
-                isCoolingDown = false,
-                statusMessage = "Gallery scan complete! $indexed documents indexed & synced."
-            )
+                    val currentPercent = if (totalInGallery > 0) (offset * 100 / totalInGallery).coerceIn(0, 100) else 100
+                    _scanProgress.value = _scanProgress.value.copy(
+                        indexedCount = indexed,
+                        percent = currentPercent,
+                        currentBatchProcessed = newDocs.size
+                    )
+
+                    if (offset >= totalInGallery) {
+                        scanPrefs.edit().putInt("last_gallery_offset", 0).apply()
+                        break
+                    }
+
+                    // Gentle 1s breather between batches of 50 to maintain low device thermals
+                    delay(1000)
+                }
+
+                _scanProgress.value = _scanProgress.value.copy(
+                    isScanning = false,
+                    isCoolingDown = false,
+                    statusMessage = "Gallery scan complete! $indexed documents indexed & synced."
+                )
+            } finally {
+                try {
+                    if (wakeLock?.isHeld == true) wakeLock.release()
+                } catch (_: Exception) {}
+            }
         }
     }
 

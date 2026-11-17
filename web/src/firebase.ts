@@ -175,18 +175,29 @@ export function subscribeToDocuments(
       snapshot.forEach((d) => {
         docs.push(d.data() as DocumentEntity);
       });
-      if (docs.length > 0) {
-        onUpdate(docs);
-      } else {
-        onUpdate(DEMO_DOCUMENTS);
-      }
+      onUpdate(docs);
     }, (error) => {
-      console.warn('Firestore snapshot error, using cached demo data:', error);
-      onUpdate(DEMO_DOCUMENTS);
+      console.warn('Firestore snapshot error with orderBy, trying basic collection query:', error);
+      try {
+        const simpleQ = collection(db, 'users', userId, 'documents');
+        return onSnapshot(simpleQ, (s2) => {
+          const docs: DocumentEntity[] = [];
+          s2.forEach((d) => {
+            docs.push(d.data() as DocumentEntity);
+          });
+          docs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          onUpdate(docs);
+        }, (err2) => {
+          console.error('Firestore simple collection query error:', err2);
+          onUpdate([]);
+        });
+      } catch {
+        onUpdate([]);
+      }
     });
   } catch (e) {
-    console.warn('Firestore subscription fallback to demo:', e);
-    onUpdate(DEMO_DOCUMENTS);
+    console.warn('Firestore subscription fallback:', e);
+    onUpdate([]);
     return () => {};
   }
 }

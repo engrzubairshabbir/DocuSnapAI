@@ -473,35 +473,22 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         if (scanProgress.isScanning) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (scanProgress.isCoolingDown) {
-                                    Button(
-                                        onClick = { viewModel.skipCooldownAndContinue() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = AccentAmber),
-                                        shape = RoundedCornerShape(10.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Icon(Icons.Default.FastForward, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Skip 2m Pause", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    }
-                                }
-                                OutlinedButton(
-                                    onClick = { viewModel.stopContinuousGalleryScan() },
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.weight(if (scanProgress.isCoolingDown) 0.8f else 1f)
-                                ) {
-                                    Icon(Icons.Default.Pause, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Pause", color = TextSecondary, fontSize = 11.sp)
-                                }
+                            Button(
+                                onClick = { viewModel.stopContinuousGalleryScan() },
+                                colors = ButtonDefaults.buttonColors(containerColor = CardDark),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Pause, contentDescription = null, tint = AccentAmber, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Pause Scanning", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         } else {
                             Button(
                                 onClick = {
                                     viewModel.startContinuousGalleryScan()
-                                    Toast.makeText(context, "Starting automated gallery sync (50 at a time)...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Starting fast automated gallery sync...", Toast.LENGTH_SHORT).show()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
                                 shape = RoundedCornerShape(10.dp),
@@ -509,7 +496,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Start Auto-Batch Gallery Sync (50/batch)", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Start Fast Gallery Sync (Batches of 50)", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }

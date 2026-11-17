@@ -10,8 +10,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // User profile document
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // User documents vault
     match /users/{userId}/documents/{documentId} {
+      allow read, write, delete: if isOwner(userId);
+    }
+
+    // On-demand media requests
+    match /users/{userId}/media_requests/{reqId} {
       allow read, write, delete: if isOwner(userId);
     }
 
