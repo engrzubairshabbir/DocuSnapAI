@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, ZoomIn, ZoomOut, Copy, Check, FileText, Pill, DollarSign, 
   UserCheck, ChevronDown, ChevronUp, Plus, Tag, Sparkles, Trash2, ExternalLink,
@@ -30,6 +30,15 @@ export const DocumentInspectorModal: React.FC<Props> = ({
   const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(document?.cloud_storage_url || null);
   const [fetchingFromPhone, setFetchingFromPhone] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setResolvedImageUrl(document?.cloud_storage_url || null);
+    setFetchError(null);
+    setFetchingFromPhone(false);
+    setZoom(1);
+    setShowRawOcr(false);
+    setShowAddTagModal(false);
+  }, [document?.id, document?.cloud_storage_url]);
 
   if (!document) return null;
 

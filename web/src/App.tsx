@@ -151,14 +151,17 @@ export const App: React.FC = () => {
       </nav>
 
       {/* Modals & Prompts */}
-      <DocumentInspectorModal
-        document={selectedDocument}
-        onClose={() => setSelectedDocument(null)}
-        onUpdate={(updated) => {
-          setSelectedDocument(updated);
-          setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
-        }}
-      />
+      {selectedDocument && (
+        <DocumentInspectorModal
+          key={selectedDocument.id}
+          document={selectedDocument}
+          onClose={() => setSelectedDocument(null)}
+          onUpdate={(updated) => {
+            setSelectedDocument(updated);
+            setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+          }}
+        />
+      )}
 
       <UploadModal
         userId={userId}
