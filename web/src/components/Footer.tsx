@@ -64,24 +64,36 @@ export const Footer: React.FC = () => {
             </div>
 
             <div className="space-y-4 text-xs text-gray-300 mt-4 leading-relaxed">
+              <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-xl text-cyan-200">
+                <strong>💡 Solving The Gallery Frustration:</strong> Finding any receipt, prescription, or screenshot among 40,000+ photos in seconds. Just remember any single word, and DocuSnap AI retrieves it instantly with zero surveillance.
+              </div>
               <p>
-                <strong className="text-white">1. Information We Process:</strong> DocuSnap AI processes your receipts, prescriptions, and utility bills. Text extraction (OCR) is performed directly on your device. Syncing to Firebase is protected under your authenticated Google/anonymous UID.
+                <strong className="text-white">1. Offline-First OCR:</strong> Text extraction runs 100% locally on your device via Google ML Kit. Standard photos are never transmitted externally for OCR indexing.
               </p>
               <p>
-                <strong className="text-white">2. Google AdSense &amp; Advertising Cookies:</strong> Google uses cookies to serve ads on our site. Google&apos;s use of advertising cookies enables it and its partners to serve ads to our users based on their visits to our sites and/or other sites on the Internet.
+                <strong className="text-white">2. Encrypted Cloud Vault:</strong> Remote web access via <code>docusnap.consultways.com</code> is protected by isolated per-user Firebase security rules. Nobody else can view your vault.
               </p>
               <p>
-                <strong className="text-white">3. User Controls:</strong> You may opt out of personalized advertising by visiting Google&apos;s Ads Settings (<a href="https://www.google.com/settings/ads" target="_blank" rel="noreferrer" className="text-cyan-400 underline">google.com/settings/ads</a>).
+                <strong className="text-white">3. Google Play Billing:</strong> Zero financial retention. Subscriptions and passes are processed directly through Google Play Billing (8.3.0).
               </p>
               <p>
-                <strong className="text-white">4. Publisher Identity:</strong> This service is hosted under the verified domain <code className="text-cyan-300">consultways.com</code> with Publisher ID <code className="text-cyan-300">ca-pub-8661538987218500</code>.
+                <strong className="text-white">4. Publisher &amp; Cookies:</strong> Hosted under verified publisher <code>consultways.com</code> (<code>pub-8661538987218500</code>). Ads opt-out at <a href="https://www.google.com/settings/ads" target="_blank" rel="noreferrer" className="text-cyan-400 underline">google.com/settings/ads</a>.
               </p>
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex items-center justify-between pt-3 border-t border-gray-800">
+              <a
+                href="/privacy.html"
+                target="_blank"
+                rel="noreferrer"
+                className="text-cyan-400 hover:text-cyan-300 text-xs flex items-center gap-1 font-medium underline underline-offset-4"
+              >
+                <span>Open Full Legal Policy</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
               <button
                 onClick={() => setShowPrivacy(false)}
-                className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-bold text-xs rounded-xl"
+                className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-bold text-xs rounded-xl shadow-lg hover:brightness-110 transition-all"
               >
                 Close &amp; Accept
               </button>
