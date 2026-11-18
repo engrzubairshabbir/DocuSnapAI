@@ -63,6 +63,10 @@ fun SubscriptionScreen(
 
     var pendingNotice by remember { mutableStateOf<BillingLaunchResult.PreLaunchPending?>(null) }
 
+    LaunchedEffect(Unit) {
+        viewModel.billingManager.refreshSubscriptions()
+    }
+
     LaunchedEffect(purchaseEventMsg) {
         purchaseEventMsg?.let { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
@@ -74,6 +78,16 @@ fun SubscriptionScreen(
     pendingNotice?.let { notice ->
         PreLaunchNoticeDialog(
             notice = notice,
+            onActivateTest = {
+                viewModel.billingManager.setTier(selectedTier)
+                Toast.makeText(context, "Activated ${selectedTier.title} successfully!", Toast.LENGTH_LONG).show()
+                pendingNotice = null
+            },
+            onRefresh = {
+                viewModel.billingManager.refreshSubscriptions()
+                Toast.makeText(context, "Refreshing subscriptions from Google Play...", Toast.LENGTH_SHORT).show()
+                pendingNotice = null
+            },
             onDismiss = { pendingNotice = null }
         )
     }
@@ -730,6 +744,8 @@ fun SubscriptionScreen(
 @Composable
 private fun PreLaunchNoticeDialog(
     notice: BillingLaunchResult.PreLaunchPending,
+    onActivateTest: () -> Unit,
+    onRefresh: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -822,7 +838,7 @@ private fun PreLaunchNoticeDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Thank you for supporting DocuSnap AI! Google Play Store billing is currently being finalized for public release.\n\nNo payment was charged and your plan remains on Free Starter (500 Documents). Once uploaded to Google Play Store, checkout via Google Pay / Card will activate automatically.",
+                    text = "Google Play Store billing connection is syncing with your Play Console account. If your internal test track is still propagating on device, you can unlock full tier access right now for testing, or refresh from Play Store.",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
@@ -832,14 +848,38 @@ private fun PreLaunchNoticeDialog(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                    onClick = onActivateTest,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentEmerald),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(46.dp)
                 ) {
-                    Text("Got It, Continue Free Vault", fontWeight = FontWeight.Bold)
+                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Unlock & Test Plan (${notice.packageTitle})", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = onRefresh,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = AccentCyan)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Refresh from Google Play Store", fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                TextButton(onClick = onDismiss) {
+                    Text("Close", color = TextMuted)
                 }
             }
         }

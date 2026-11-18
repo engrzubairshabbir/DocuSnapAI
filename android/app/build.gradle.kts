@@ -14,8 +14,8 @@ android {
         applicationId = "com.docusnap.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 26
-        versionName = "26.2.7"
+        versionCode = 27
+        versionName = "27.0.0"
 
 
 

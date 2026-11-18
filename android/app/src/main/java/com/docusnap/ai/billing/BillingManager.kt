@@ -215,6 +215,16 @@ class BillingManager(private val context: Context) : PurchasesUpdatedListener {
         _purchaseEventMessage.value = null
     }
 
+    fun refreshSubscriptions() {
+        if (!billingClient.isReady) {
+            startConnection()
+        } else {
+            queryAvailableSubscriptions()
+            queryAvailableOneTimeProducts()
+            queryActivePurchases()
+        }
+    }
+
     private fun startConnection() {
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(billingResult: BillingResult) {
@@ -477,7 +487,7 @@ class BillingManager(private val context: Context) : PurchasesUpdatedListener {
         }
     }
 
-    private fun setTier(tier: SubscriptionTier) {
+    fun setTier(tier: SubscriptionTier) {
         prefs.edit().putString(KEY_TIER, tier.id).apply()
         _activeTier.value = tier
     }
