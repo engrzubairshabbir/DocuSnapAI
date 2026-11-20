@@ -16,7 +16,17 @@ export const Footer: React.FC = () => {
             <span>&bull; docusnap.consultways.com</span>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3">
+            <a
+              href="https://play.google.com/store/apps/details?id=com.docusnap.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center space-x-1.5 transition-colors"
+            >
+              <span>Get Android App (Google Play)</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <span className="text-gray-600 hidden sm:inline">&bull;</span>
             <button
               onClick={() => setShowPrivacy(true)}
               className="hover:text-cyan-400 transition-colors underline-offset-4 hover:underline"

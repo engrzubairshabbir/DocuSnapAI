@@ -67,7 +67,7 @@ export const ConversationalSearch: React.FC<Props> = ({ documents, onSelectDocum
   return (
     <div className="space-y-6">
       {/* Remote Phone Vault Connected Banner */}
-      <div className="bg-gradient-to-r from-blue-900/30 via-cyan-950/20 to-purple-900/30 border border-cyan-500/30 rounded-2xl p-3.5 flex items-center justify-between shadow-[0_0_20px_rgba(0,245,255,0.1)]">
+      <div className="bg-gradient-to-r from-blue-900/30 via-cyan-950/20 to-purple-900/30 border border-cyan-500/30 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_0_20px_rgba(0,245,255,0.1)]">
         <div className="flex items-center space-x-3">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
           <div>
@@ -80,6 +80,24 @@ export const ConversationalSearch: React.FC<Props> = ({ documents, onSelectDocum
             <p className="text-[11px] text-gray-400">Search all OCR text, prescriptions & bills indexed on your phone from any browser.</p>
           </div>
         </div>
+        <a
+          href="https://play.google.com/store/apps/details?id=com.docusnap.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center space-x-2.5 px-3 py-1.5 bg-[#090D16] hover:bg-[#121B2C] border border-cyan-500/40 hover:border-cyan-400 rounded-xl transition-all shadow-md group whitespace-nowrap self-stretch sm:self-auto justify-center"
+          title="Download DocuSnap AI from Google Play Store"
+        >
+          <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+            <path d="M3.6 1.8L13.8 12 3.6 22.2C3.2 21.8 3 21.2 3 20.4V3.6C3 2.8 3.2 2.2 3.6 1.8Z" fill="#2196F3"/>
+            <path d="M17.2 8.6L13.8 12L17.2 15.4L21.3 13.1C22.2 12.6 22.2 11.4 21.3 10.9L17.2 8.6Z" fill="#FFC107"/>
+            <path d="M3.6 1.8C4.1 1.4 4.8 1.4 5.5 1.8L17.2 8.6L13.8 12L3.6 1.8Z" fill="#4CAF50"/>
+            <path d="M13.8 12L17.2 15.4L5.5 22.2C4.8 22.6 4.1 22.6 3.6 22.2L13.8 12Z" fill="#F44336"/>
+          </svg>
+          <div className="flex flex-col text-left leading-none">
+            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">GET IT ON</span>
+            <span className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">Google Play</span>
+          </div>
+        </a>
       </div>
 
       {/* Search Input Box */}

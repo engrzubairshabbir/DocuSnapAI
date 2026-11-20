@@ -808,7 +808,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(30.dp))
 
         Text(
-            text = "DocuSnap AI v1.0.0 (Build 2026.11)\nDual-Ecosystem Bill & Rx Finder Engine",
+            text = "DocuSnap AI v${com.docusnap.ai.BuildConfig.VERSION_NAME} (Build ${com.docusnap.ai.BuildConfig.VERSION_CODE})\nDual-Ecosystem Bill & Rx Finder Engine",
             color = TextMuted,
             fontSize = 11.sp,
             lineHeight = 16.sp

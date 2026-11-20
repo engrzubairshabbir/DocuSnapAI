@@ -82,6 +82,26 @@ export const Navbar: React.FC<Props> = ({
 
         {/* Action Button & Google Sign-In */}
         <div className="flex items-center space-x-2.5">
+          {/* Google Play Store Redirect Button */}
+          <a
+            href="https://play.google.com/store/apps/details?id=com.docusnap.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center space-x-2 px-3 py-1.5 bg-[#111827] hover:bg-[#1a2333] border border-gray-700/80 hover:border-cyan-500/60 rounded-xl transition-all shadow-sm group active:scale-95"
+            title="Download DocuSnap AI from Google Play Store"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+              <path d="M3.6 1.8L13.8 12 3.6 22.2C3.2 21.8 3 21.2 3 20.4V3.6C3 2.8 3.2 2.2 3.6 1.8Z" fill="#2196F3"/>
+              <path d="M17.2 8.6L13.8 12L17.2 15.4L21.3 13.1C22.2 12.6 22.2 11.4 21.3 10.9L17.2 8.6Z" fill="#FFC107"/>
+              <path d="M3.6 1.8C4.1 1.4 4.8 1.4 5.5 1.8L17.2 8.6L13.8 12L3.6 1.8Z" fill="#4CAF50"/>
+              <path d="M13.8 12L17.2 15.4L5.5 22.2C4.8 22.6 4.1 22.6 3.6 22.2L13.8 12Z" fill="#F44336"/>
+            </svg>
+            <div className="flex flex-col text-left leading-none">
+              <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">GET IT ON</span>
+              <span className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors">Google Play</span>
+            </div>
+          </a>
+
           {/* Sign in with Google / Logged-in profile badge */}
           {isAnonymous || !userEmail ? (
             <button
